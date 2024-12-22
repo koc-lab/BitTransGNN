@@ -16,7 +16,6 @@ In this work, we propose a method to improve the performance of transformers qua
 
    We recommend to create a Conda environment or a virtual environment and install the dependencies to the environment. 
    ```bash
-   # 
    pip install -r requirements.txt
    ```
 
