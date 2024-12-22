@@ -26,7 +26,7 @@ In this work, we propose a method to improve the performance of transformers qua
    ```
 
 ## Running the Code
-   The main folder contains `bitbertgcn` and `bitbertgcn_calcs` folders. `bitbertgcn` folder contains the scripts written to implement the methods proposed in the manuscript. `bitbertgcn_calcs` contains sample notebooks that calculate the theoretical memory and energy consumption of different quantized methods.
+   The main folder contains `bitbertgcn` and `bitbertgcn_calcs` folders. `bitbertgcn` folder contains the scripts written to implement the methods introduced in the manuscript. `bitbertgcn_calcs` contains sample notebooks that calculate the theoretical memory and energy consumption of different quantized methods.
    To run the method, first navigate to the `bitbertgcn` directory:
    ```bash
    cd bitbertgcn
