@@ -1,0 +1,37 @@
+name: bitbert-inference
+
+log_configs:
+  comet: True
+  pandas_df: True
+  wandb: False
+  workspace: !!null #you should enter the name of your Comet workspace here
+  api_key: !!null #you should enter the api_key of your Comet account here
+
+load_configs:
+  workspace: !!null #you should enter the name of your Comet workspace here
+  api_key: !!null #you should enter the api_key of your Comet account here
+  experiment_load_name: !!null
+  experiment_load_key: !!null
+  manual_load_ckpt: !!null
+  local_load: True
+
+experiment_configs:
+  seed: 0
+  dataset_name: ["20ng", "mr", "R8", "R52", "ohsumed", "cola", "stsb", "rte", "mrpc"]
+  bert_pre_model: ["roberta-base", "bert-base-uncased"]
+  device: "cuda:3"
+  checkpoint_dir: !!null
+  log_ckpt: False
+  save_ckpt: False
+  report_time: False
+
+model_configs: 
+  max_length: 128
+  quantize_bert: True
+  quantize_embeddings: False
+  num_bits_act: 8.0
+  num_states: [2,3,5]
+
+parameters: 
+  batch_size: 32
+  bert_quant_type: "PTQ"

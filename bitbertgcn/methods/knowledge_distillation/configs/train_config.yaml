@@ -1,0 +1,59 @@
+name: bitbertgcn-kd
+
+log_configs:
+  comet: True
+  pandas_df: True
+  wandb: False
+  workspace: !!null #you should enter the name of your Comet workspace here
+  api_key: !!null #you should enter the api_key of your Comet account here
+
+load_configs:
+  workspace: !!null #you should enter the name of your Comet workspace here
+  api_key: !!null #you should enter the api_key of your Comet account here
+  experiment_load_name: !!null
+  experiment_load_key: !!null
+  manual_load_ckpt: !!null
+  local_load: True
+
+experiment_configs:
+  seed: 0
+  inference_type: "transductive"
+  dataset_name: "20ng"
+  bert_pre_model: "roberta-base"
+  device: "cuda:0"
+  distillation_type: "offline"
+  log_ckpt: False
+  save_ckpt: True
+  report_time: False
+  checkpoint_dir: !!null
+  nb_epochs: 100
+  patience: 10
+  eval_test: False
+  eval_test_every_n_epochs: 1
+
+model_configs: 
+  max_length: 128
+  quantize_bert: True
+  quantize_teacher_bert: True
+  quantize_embeddings: False
+  quantize_teacher_embeddings: False
+  quantize_gcn: False
+  num_bits_act: 8.0
+  teacher_num_states: 2
+  student_num_states: 2
+  gcn_num_states: 2
+
+parameters: 
+  gcn_layers: 2
+  bert_lr: 0.00001
+  student_lr: 0.0001
+  temperature: 1.0
+  alpha_d: 0.5
+  gcn_lr: 0.001
+  batch_size: 32
+  teacher_lmbd: 0.55
+  teacher_bert_quant_type: "QAT"
+  student_bert_quant_type: "QAT"
+  joint_training: False
+  graph_hidden_size: 256
+  dropout: 0.5
