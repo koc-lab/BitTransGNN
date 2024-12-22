@@ -1,6 +1,6 @@
 # Quantized Transformers with Graph Neural Networks
 
-This repository contains the implementation of "Quantized Transformers with Graph Neural Networks" submitted to IEEE Transactions on Signal Processing (TSP). 
+This repository contains the implementation of "Quantized Transformers with Graph Neural Networks" about to be submitted to IEEE Transactions on Signal Processing (TSP). 
 
 ## Introduction
 
@@ -69,7 +69,7 @@ In this work, we propose a method to improve the performance of transformers qua
    python -m methods.{framework}.{mode}
    ```
    where `{framework}` refers to one of the four methods being used and `{mode}` defines whether the script is used for training, testing, or sweeping through hyperparameters.
-
+#
 ### Fine-Tuning Transformer Models with Quantization
    We fine-tune quantized transformer models before integrating them into our architecture. The fine-tuning is conducted through the following code:
    ```bash
@@ -77,7 +77,7 @@ In this work, we propose a method to improve the performance of transformers qua
    ```
 
    The `save_ckpt` variable should be set to `True` in the `configs/train_config.yaml` file if one wants to save model checkpoint for later use in the joint architecture.
-
+#
 ### BitBERTGCN: Training Quantized Transformers with GNNs
    We combine quantized transformers with GNNs during training to improve their performance and enhance their predictions. We use a Graph Convolutional Network (GCN) as the GNN companion. We interpolate the outputs of the quantized transformer and the GNN during training. 
    <!-- Uncomment this part after reviewing stage is completed -->
@@ -97,7 +97,7 @@ In this work, we propose a method to improve the performance of transformers qua
    Different $\lambda$ values can be searched using the `run_sweep.py` script. 
 
    For use in `direct-seperation` and `knowledge-disillation` methods, the `save_ckpt` variable should be set to `True`.
-
+#
 ### Direct Seperation (DS)
    After `BitBERTGCN` training, `DS` seperates the quantized transformer and its classifier from the GCN after training and uses them for inference, without GCN's assistance during inference time. 
    <!-- Uncomment this part after reviewing stage is completed -->
@@ -107,7 +107,7 @@ In this work, we propose a method to improve the performance of transformers qua
    ```bash
    python -m methods.direct-seperation.inference
    ```
-
+#
 ### Seperation Through Knowledge Distillation (KD)
    `KD` compresses the knowledge of the `BitBERTGCN` model into a solitary quantized transformer through distillation. A `BitBERTGCN` model is used as the teacher and a `BitBERT` model is used as the student model.
 
