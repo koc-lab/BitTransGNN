@@ -1,4 +1,4 @@
-name: bitbertgcn-kd
+name: bittransgnn-kd
 
 log_configs:
   comet: True

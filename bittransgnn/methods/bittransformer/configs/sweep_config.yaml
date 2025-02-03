@@ -1,10 +1,10 @@
-name: bitbert-train
+name: bittrans-train
 
 log_configs:
   comet: True
   pandas_df: True
   wandb: False
-  project_name: bitbert-train
+  project_name: bittrans-train
   workspace: !!null #you should enter the name of your Comet workspace here
   api_key: !!null #you should enter the api_key of your Comet account here
 

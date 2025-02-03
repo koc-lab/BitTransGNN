@@ -1,4 +1,4 @@
-name: bitbert-inference
+name: bittrans-inference
 
 log_configs:
   comet: True

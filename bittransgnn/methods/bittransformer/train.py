@@ -2,7 +2,7 @@ from pathlib import Path
 
 import yaml
 
-from .run_method import run_bitbert
+from .run_method import run_bittransformer
 from logger import Logger
 from utils import set_seed
 
@@ -35,10 +35,10 @@ for dataset_name in exp_configs["dataset_name"]:
             iter_model_configs["num_states"] = num_states
             iter_model_configs["quantize_bert"] = quantize_bert
             iter_config = {"experiment_configs": iter_exp_configs, "model_configs": iter_model_configs, "parameters": parameters_log}
-            model_checkpoint, ckpt_dir, best_metrics = run_bitbert(iter_config)
+            model_checkpoint, ckpt_dir, best_metrics = run_bittransformer(iter_config)
             log_ckpt, save_ckpt = exp_configs["log_ckpt"], exp_configs["save_ckpt"]
             logger = Logger(log_configs["comet"], log_configs["pandas_df"], log_configs["wandb"], log_ckpt, save_ckpt,
                             api_key=log_configs["api_key"], workspace=log_configs["workspace"])
             logger.log(iter_config, best_metrics, 
-                        model_name="bitbert_train", project_name="bitbert_train", 
+                        model_name="bittrans_train", project_name="bittrans_train", 
                         model_checkpoint=model_checkpoint, ckpt_dir=ckpt_dir, parameters=parameters_log)

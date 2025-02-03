@@ -13,7 +13,7 @@ log_configs:
   comet: True
   pandas_df: True
   wandb: False
-  project_name: bitbertgcn-kd
+  project_name: bittransgnn-kd
   workspace: !!null #you should enter the name of your Comet workspace here
   api_key: !!null #you should enter the api_key of your Comet account here
 

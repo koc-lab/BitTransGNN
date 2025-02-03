@@ -10,7 +10,7 @@ import numpy as np
 
 from metrics import Metrics, compute_loss, distillation_loss, prep_logits
 
-class BitBERTTrainer:
+class BitTransformerTrainer:
     def __init__(self, model, dataset_name, optimizer, scheduler, text_data: TextDataObject, device, 
                  eval_test = True, eval_test_every_n_epochs: int = 1):
         self.model = model
@@ -174,7 +174,7 @@ class BitBERTTrainer:
                 torch.cuda.empty_cache()
         return model_checkpoint, best_metrics
 
-class BitBERTGCNTrainer:
+class BitTransGNNTrainer:
     def __init__(self, model, dataset_name, 
                  optimizer, scheduler, 
                  graph_data: GraphDataObject, 
@@ -388,7 +388,7 @@ class BitBERTGCNTrainer:
                 torch.cuda.empty_cache()
         return model_checkpoint, best_metrics
 
-class BitBERTGCNKDTrainer:
+class BitTransGNNKDTrainer:
     def __init__(self, teacher_model, student_model, dataset_name, student_optimizer, student_scheduler, 
                  graph_data, 
                  alpha_d, temperature, 

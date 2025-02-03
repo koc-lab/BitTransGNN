@@ -2,14 +2,14 @@ import os
 
 import torch
 
-from utils import get_quant_name, get_train_state, get_model_type, set_bitbertgcn_kd_ckpt_dir, get_pretrained_bert_ckpt, get_pretrained_teacher_bitbertgcn_ckpt, load_bitbertgcn_kd_student_for_inference
+from utils import get_quant_name, get_train_state, get_model_type, set_bittransgnn_kd_ckpt_dir, get_pretrained_bert_ckpt, get_pretrained_teacher_bittransgnn_ckpt, load_bittransgnn_kd_student_for_inference
 from data.loader.dataloaders import GraphDataObject, TextDataObject
-from models import BitBERTGCN, BertStudent, BertClassifier
-from trainers import BitBERTGCNKDTrainer
-from inference_engines import BitBERTInference
+from models import BitTransGNN, BitTransformerStudent, BitTransformer
+from trainers import BitTransGNNKDTrainer
+from inference_engines import BitTransformerInference
 from quantization.binarize_model import quantize_teacher_architecture, quantize_student_architecture
 
-def run_bitbertgcn_kd(config):
+def run_bittransgnn_kd(config):
     exp_configs = config["experiment_configs"]
     model_configs = config["model_configs"]
     parameters = config["parameters"]
@@ -39,7 +39,7 @@ def run_bitbertgcn_kd(config):
     train_state = get_train_state(joint_training)
     model_type = get_model_type(quantize_teacher_bert, quantize_gcn)
 
-    ckpt_dir_dict = set_bitbertgcn_kd_ckpt_dir(checkpoint_dir, model_type, quantize_bert, quantize_embeddings, 
+    ckpt_dir_dict = set_bittransgnn_kd_ckpt_dir(checkpoint_dir, model_type, quantize_bert, quantize_embeddings, 
                                                student_bert_quant_type, bert_pre_model, train_state, student_quant_name, 
                                                dataset_name, num_bits_act, inference_type=inference_type)
     if save_ckpt:
@@ -52,21 +52,21 @@ def run_bitbertgcn_kd(config):
                                             student=True)
     print("Transformer type: ", bert_pre_model)
 
-    teacher_ckpt = get_pretrained_teacher_bitbertgcn_ckpt(model_type, bert_pre_model, distillation_type,
+    teacher_ckpt = get_pretrained_teacher_bittransgnn_ckpt(model_type, bert_pre_model, distillation_type,
                                                           quantize_teacher_bert, quantize_teacher_embeddings, 
                                                           teacher_bert_quant_type, 
                                                           train_state, teacher_quant_name, 
                                                           dataset_name, 
                                                           student_ckpt, local_load, manual_load_ckpt, 
                                                           workspace, api_key, experiment_load_name, experiment_load_key,
-                                                          bitbertgcn_inference_type=inference_type)
-    print("Number of states of BitBERTGCN model parameters: ", teacher_num_states)
+                                                          bittransgnn_inference_type=inference_type)
+    print("Number of states of BitTransGNN model parameters: ", teacher_num_states)
 
     graph_data = GraphDataObject(dataset_name, batch_size, train_only)
     nb_class = graph_data.nb_class
 
     regression = dataset_name == "stsb"
-    teacher_model = BitBERTGCN(pretrained_model=bert_pre_model, joint_training=joint_training, 
+    teacher_model = BitTransGNN(pretrained_model=bert_pre_model, joint_training=joint_training, 
                                  quantize_gcn=quantize_gcn, gcn_num_states=gcn_num_states,
                                  nb_class=nb_class, lmbd=teacher_ckpt["lmbd"], gcn_layers=gcn_layers, n_hidden=n_hidden, dropout=dropout,
                                  regression=regression)
@@ -81,7 +81,7 @@ def run_bitbertgcn_kd(config):
     if teacher_lmbd is not None:
         assert (teacher_lmbd == teacher_ckpt["lmbd"])
 
-    student_model = BertStudent(pretrained_model=bert_pre_model, nb_class=nb_class, regression=regression)
+    student_model = BitTransformerStudent(pretrained_model=bert_pre_model, nb_class=nb_class, regression=regression)
 
     student_model = quantize_student_architecture(student_model, student_ckpt, quantize_bert, student_bert_quant_type, student_num_states, 
                                                   quantize_embeddings, num_bits_act)
@@ -104,7 +104,7 @@ def run_bitbertgcn_kd(config):
     teacher_scheduler = torch.optim.lr_scheduler.MultiStepLR(teacher_optimizer, milestones=[nb_epochs//2], gamma=0.1)
     student_scheduler = torch.optim.lr_scheduler.MultiStepLR(student_optimizer, milestones=[nb_epochs//2], gamma=0.1)
 
-    trainer = BitBERTGCNKDTrainer(teacher_model, student_model, dataset_name,
+    trainer = BitTransGNNKDTrainer(teacher_model, student_model, dataset_name,
                                   student_optimizer, student_scheduler, 
                                   graph_data,
                                   alpha_d, temperature, 
@@ -117,7 +117,7 @@ def run_bitbertgcn_kd(config):
     model_checkpoint, best_metrics = trainer.run(nb_epochs, patience, report_time)
     return model_checkpoint, ckpt_dir_dict, best_metrics    
 
-def run_bitbertgcn_kd_for_inference(config):
+def run_bittransgnn_kd_for_inference(config):
     exp_configs = config["experiment_configs"]
     model_configs = config["model_configs"]
     parameters = config["parameters"]
@@ -134,14 +134,14 @@ def run_bitbertgcn_kd_for_inference(config):
     train_state = get_train_state(joint_training)
     model_type = get_model_type(quantize_teacher_bert, quantize_gcn)
 
-    ckpt_dir_dict = set_bitbertgcn_kd_ckpt_dir(checkpoint_dir, model_type, quantize_bert, quantize_embeddings, 
+    ckpt_dir_dict = set_bittransgnn_kd_ckpt_dir(checkpoint_dir, model_type, quantize_bert, quantize_embeddings, 
                                                student_bert_quant_type, bert_pre_model, train_state, student_quant_name, 
                                                dataset_name, num_bits_act, inference=True, inference_type=inference_type)
 
     text_data = TextDataObject(dataset_name, batch_size)
     nb_class = text_data.nb_class
 
-    student_ckpt = load_bitbertgcn_kd_student_for_inference(quantize_bert, quantize_embeddings, 
+    student_ckpt = load_bittransgnn_kd_student_for_inference(quantize_bert, quantize_embeddings, 
                                                             bert_pre_model, student_quant_name, 
                                                             dataset_name, student_bert_quant_type, 
                                                             num_bits_act, 
@@ -149,10 +149,10 @@ def run_bitbertgcn_kd_for_inference(config):
                                                             experiment_load_name, experiment_load_key, 
                                                             api_key, workspace,
                                                             model_type, train_state,
-                                                            bitbertgcn_inference_type=inference_type)
+                                                            bittransgnn_inference_type=inference_type)
         
     regression = dataset_name == "stsb"
-    student_model = BertClassifier(pretrained_model=bert_pre_model, nb_class=nb_class, 
+    student_model = BitTransformer(pretrained_model=bert_pre_model, nb_class=nb_class, 
                                    quantize=quantize_bert, num_states=student_num_states, 
                                    quantize_embeddings=quantize_embeddings, num_bits_act=num_bits_act,
                                    regression=regression)
@@ -162,7 +162,7 @@ def run_bitbertgcn_kd_for_inference(config):
     student_model = student_model.to(device)
     text_data.set_dataloaders_bert(student_model, max_length)
 
-    inference_engine = BitBERTInference(student_model, dataset_name, text_data, device)    
+    inference_engine = BitTransformerInference(student_model, dataset_name, text_data, device)    
 
     inference_metrics = inference_engine.run(report_time)
     return inference_metrics, ckpt_dir_dict

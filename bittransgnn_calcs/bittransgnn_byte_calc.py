@@ -1,4 +1,4 @@
-from bitbertgcn_ops_calc import bert_embedding_params, bert_attn_params, bert_ffn_params, bert_pooler_params, bert_layernorms, bert_clsif, gcn_params
+from bittransgnn_ops_calc import bert_embedding_params, bert_attn_params, bert_ffn_params, bert_pooler_params, bert_layernorms, bert_clsif, gcn_params
 
 def bert_bytes(model_type, model_size, be, bl, add_clsif, bg=32.0, do=20, add_gcn=False):
     if model_type == "bert":

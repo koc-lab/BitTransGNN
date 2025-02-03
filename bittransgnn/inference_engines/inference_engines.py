@@ -8,7 +8,7 @@ import numpy as np
 from data.loader.dataloaders import GraphDataObject, TextDataObject
 from metrics import Metrics, compute_loss, prep_logits
 
-class BitBERTInference:
+class BitTransformerInference:
     def __init__(self, model, dataset_name, text_data: TextDataObject, device):
         self.model = model
         self.dataset_name = dataset_name
@@ -94,7 +94,7 @@ class BitBERTInference:
 
         return inference_metrics
     
-class BitBERTGCNInference:
+class BitTransGNNInference:
     def __init__(self, model, dataset_name, graph_data: GraphDataObject, joint_training, device, batch_size, inductive=False):
         self.model = model
         self.dataset_name = dataset_name

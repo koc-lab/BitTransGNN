@@ -63,9 +63,9 @@ class GCNTorch(nn.Module):
         x = self.gcnconv2(x, adj)
         return x
 
-class BertClassifier(nn.Module):
+class BitTransformer(nn.Module):
     def __init__(self, pretrained_model='bert-base-uncased', nb_class=20, quantize=False, num_states=2, quantize_embeddings=False, num_bits_act=8.0, regression=False):
-        super(BertClassifier, self).__init__()
+        super(BitTransformer, self).__init__()
         self.nb_class = nb_class
         self.tokenizer = AutoTokenizer.from_pretrained(pretrained_model)
         bert_model = AutoModel.from_pretrained(pretrained_model)
@@ -90,9 +90,9 @@ class BertClassifier(nn.Module):
             pred = torch.log(pred)
         return pred
     
-class BitBERTGCN(nn.Module):
+class BitTransGNN(nn.Module):
     def __init__(self, pretrained_model='roberta-base', joint_training=True, quantize_gcn=False, gcn_num_states=2, nb_class=20, lmbd=0.7, gcn_layers=2, n_hidden=200, dropout=0.5, regression=False):
-        super(BitBERTGCN, self).__init__()
+        super(BitTransGNN, self).__init__()
         self.lmbd = lmbd
         self.joint_training = joint_training
         self.nb_class = nb_class
@@ -124,9 +124,9 @@ class BitBERTGCN(nn.Module):
             pred = (gcn_pred+1e-10) * self.lmbd + cls_pred * (1 - self.lmbd)
         return pred
 
-class BertStudent(nn.Module):
+class BitTransformerStudent(nn.Module):
     def __init__(self, pretrained_model='roberta-base', nb_class=20, regression=False):
-        super(BertStudent, self).__init__()
+        super(BitTransformerStudent, self).__init__()
         self.tokenizer = AutoTokenizer.from_pretrained(pretrained_model)
         self.bert_model = AutoModel.from_pretrained(pretrained_model)
         self.feat_dim = list(self.bert_model.modules())[-2].out_features

@@ -1,3 +1,5 @@
+from typing import Optional
+
 def bert_embedding_params(V, S, T, dh):
     return V*dh+S*dh+T*dh
 
@@ -21,6 +23,18 @@ def bert_clsif(dh, do=20):
 def gcn_params(dh, dg, do):
     return dh*dg+dg + dg*do+do
 
+"""
+def count_ops(n, m, p):
+    adds = n*m*p
+    mults = n*m*p
+    return adds, mults
+
+def count_quant_ops(n, m, p):
+    adds = n*(2*m-1)*p
+    mults = n*(m+p)
+    return adds, mults
+"""
+
 def gcn_add_ops(num_nodes, num_edges, dh, dg, do):
     return num_edges*dh + num_nodes*dh*(dg-1) + num_nodes*dg*(do-1) + num_nodes*do
 
@@ -28,8 +42,9 @@ def gcn_mult_ops(num_nodes, num_edges, dh, dg, do):
     return num_edges*dh + num_nodes*dh*dg + num_nodes*dg*do
 
 def gcn_full_ops(num_nodes, num_edges, dh, dg, do):
-    add_op = num_edges*dh + num_nodes*dh*(dg-1) + num_nodes*dg*(do-1) + num_nodes*do
-    mult_op = num_edges*dh + num_nodes*dh*dg + num_nodes*dg*do
+    #add_op, mult_op = gcn_add_ops(num_nodes, edge_count, dh, dg, do), gcn_mult_ops(num_nodes, edge_count, dh, dg, do)
+    add_op = 2*num_edges*dh + num_nodes*dh*(dg-1) + num_nodes*dg + num_nodes*dg*(do-1) + num_nodes*do
+    mult_op = 2*num_edges*dh + num_nodes*dh*dg + num_nodes*dg*do
     return add_op, mult_op
 
 def gcn_quant_ops(num_nodes, num_edges, dh, dg, do, bin):
@@ -40,7 +55,7 @@ def gcn_quant_ops(num_nodes, num_edges, dh, dg, do, bin):
     mult_ops = num_edges*dh
     return add_ops, mult_ops
 
-def gcn_ops(num_nodes, num_edges, dh, dg, do, bits):
+def gcn_ops(num_nodes, num_edges, dh, dg, do, bits, dataset_conf: Optional[dict] = None, train_type="static", batch_size=32):
     if bits == 32.0:
         add, mult = gcn_full_ops(num_nodes, num_edges, dh, dg, do)
     else:
@@ -49,6 +64,10 @@ def gcn_ops(num_nodes, num_edges, dh, dg, do, bits):
         elif bits == 2.00 or bits == 2.32:
             bin = False
         add, mult = gcn_quant_ops(num_nodes, num_edges, dh, dg, do, bin)
+    if train_type == "dynamic":
+        assert (dataset_conf is not None)
+        num_sequences = dataset_conf["num_sequences"]
+        add, mult = add*num_sequences/batch_size, mult*num_sequences/batch_size
     return add, mult
 
 def bert_add_ops(dh, M, L, H, do):
@@ -99,7 +118,7 @@ def bert_quant_mult_ops(dh, M, L, H, do):
     total = emb + attn + ffn + pool + clsif
     return total
 
-def bert_ops(model_type, model_size, bits):
+def bert_ops(model_type, model_size, bits, dataset_conf: Optional[dict] = None, full_batch = False):
     M = 128
     do = 20
     if model_type == "bert":
@@ -130,9 +149,37 @@ def bert_ops(model_type, model_size, bits):
             bin = False
         add = bert_quant_add_ops(dh, M, L, H, do, bin)
         mult = bert_quant_mult_ops(dh, M, L, H, do)
+    if full_batch:
+        assert (dataset_conf is not None)
+        num_sequences = dataset_conf["num_sequences"]
+        add, mult = add*num_sequences, mult*num_sequences
     return add, mult
 
-def bert_ops_info(model_type, model_size, exact=False, inv=False):
+def bert_ops_info(model_type, model_size, exact=False, inv=False, dataset_conf: Optional[dict] = None, full_batch=False):
+    highbit = 32.0
+    model_type = "bert"
+    bits_list = [32.0, 1.0, 2.0]
+    for bits in bits_list:
+        print("----------")
+        print(bits, " bits")
+        addop, multop = bert_ops(model_type, model_size, bits, dataset_conf, full_batch)
+        if bits == highbit:
+            print("add: ", addop)
+            print("mult: ", multop)
+        else:
+            if exact:
+                print("add: ", addop)
+                print("mult: ", multop)
+            else:
+                highbit_addop, highbit_multop = bert_ops(model_type, model_size, highbit, dataset_conf, full_batch)
+                if inv:
+                    print("add: ", highbit_addop/addop)
+                    print("mult: ", highbit_multop/multop)
+                else:
+                    print("add: ", addop/highbit_addop)
+                    print("mult: ", multop/highbit_multop)
+
+def bertgcn_ops_info(model_type, model_size, exact=False, inv=False):
     highbit = 32.0
     model_type = "bert"
     bits_list = [32.0, 1.0, 2.0]

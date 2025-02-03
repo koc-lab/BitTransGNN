@@ -2,7 +2,7 @@ from pathlib import Path
 
 import yaml
 
-from .run_method import run_bitbert_for_inference
+from .run_method import run_bittransformer_for_inference
 from logger import Logger
 from utils import set_seed
 
@@ -35,7 +35,7 @@ for dataset_name in dataset_name_list:
             model_configs["num_states"] = num_states
             config["exp_configs"] = exp_configs
             config["model_configs"] = model_configs
-            best_metrics, ckpt_dir = run_bitbert_for_inference(config)
+            best_metrics, ckpt_dir = run_bittransformer_for_inference(config)
             log_ckpt, save_ckpt = exp_configs["log_ckpt"], exp_configs["save_ckpt"]
             logger = Logger(log_configs["comet"], log_configs["pandas_df"], log_configs["wandb"], log_ckpt, save_ckpt, 
                             api_key=log_configs["api_key"], workspace=log_configs["workspace"])

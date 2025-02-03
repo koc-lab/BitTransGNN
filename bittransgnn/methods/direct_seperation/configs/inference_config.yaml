@@ -1,10 +1,10 @@
-name: bitbertgcn-direct-seperation
+name: bittransgnn-direct-seperation
 
 log_configs:
   comet: True
   pandas_df: True
   wandb: False
-  project_name: bitbertgcn-direct-seperation
+  project_name: bittransgnn-direct-seperation
   workspace: !!null #you should enter the name of your Comet workspace here
   api_key: !!null #you should enter the api_key of your Comet account here
 

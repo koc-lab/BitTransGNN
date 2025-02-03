@@ -45,27 +45,27 @@ def get_train_state(joint_training):
         train_state = "static"
     return train_state
 
-def get_model_type(quantize_bert, quantize_gcn):
-    if quantize_bert and quantize_gcn:
-        model_type = "bitbertbitgcn"
-    elif quantize_bert and not(quantize_gcn):
-        model_type = "bitbertgcn"
-    elif not(quantize_bert) and quantize_gcn:
-        model_type = "bertbitgcn"
+def get_model_type(quantize_bert, quantize_gnn):
+    if quantize_bert and quantize_gnn:
+        model_type = "bittransbitgnn"
+    elif quantize_bert and not(quantize_gnn):
+        model_type = "bittransgnn"
+    elif not(quantize_bert) and quantize_gnn:
+        model_type = "transbitgnn"
     else:
-        model_type = "bertgcn"
+        model_type = "transgnn"
     return model_type
 
-def set_bitbert_ckpt_dir(checkpoint_dir, quantize_bert, quantize_embeddings, 
+def set_bittrans_ckpt_dir(checkpoint_dir, quantize_bert, quantize_embeddings, 
                          bert_pre_model, 
                          quant_name, dataset_name, num_bits_act, 
                          inference=False, direct_seperation=False, 
-                         bitbertgcn_inference_type=None):
+                         bittransgnn_inference_type=None):
     data_path = Path(__file__).parent.parent.joinpath("./model_checkpoints")
     result_data_path = data_path.joinpath("./results")
     model_data_path = data_path.joinpath("./model_ckpts")
-    result_data_path = result_data_path.joinpath("./bitbert")
-    model_data_path = model_data_path.joinpath("./bitbert")
+    result_data_path = result_data_path.joinpath("./bittrans")
+    model_data_path = model_data_path.joinpath("./bittrans")
     if inference:
         result_data_path = result_data_path.joinpath("./inference")
         model_data_path = model_data_path.joinpath("./inference")
@@ -77,9 +77,9 @@ def set_bitbert_ckpt_dir(checkpoint_dir, quantize_bert, quantize_embeddings,
         result_data_path = result_data_path.joinpath("./train")
         model_data_path = model_data_path.joinpath("./train")
         use_case = "fine-tuned"
-    if bitbertgcn_inference_type:
-        result_data_path = result_data_path.joinpath(f"./{bitbertgcn_inference_type}")
-        model_data_path = model_data_path.joinpath(f"./{bitbertgcn_inference_type}")
+    if bittransgnn_inference_type:
+        result_data_path = result_data_path.joinpath(f"./{bittransgnn_inference_type}")
+        model_data_path = model_data_path.joinpath(f"./{bittransgnn_inference_type}")
     if checkpoint_dir is None:
         if quantize_bert:
             if quantize_embeddings:
@@ -112,7 +112,7 @@ def set_bitbert_ckpt_dir(checkpoint_dir, quantize_bert, quantize_embeddings,
     ckpt_dir_dict = {"result_ckpt_dir": result_ckpt_dir, "model_ckpt_dir": model_ckpt_dir}
     return ckpt_dir_dict
 
-def set_bitbertgcn_ckpt_dir(checkpoint_dir, 
+def set_bittransgnn_ckpt_dir(checkpoint_dir, 
                             model_type, 
                             quantize_bert, quantize_embeddings, bert_quant_type, 
                             bert_pre_model, 
@@ -160,7 +160,7 @@ def set_bitbertgcn_ckpt_dir(checkpoint_dir,
     ckpt_dir_dict = {"result_ckpt_dir": result_ckpt_dir, "model_ckpt_dir": model_ckpt_dir}
     return ckpt_dir_dict
             
-def set_bitbertgcn_kd_ckpt_dir(checkpoint_dir, 
+def set_bittransgnn_kd_ckpt_dir(checkpoint_dir, 
                                model_type, 
                                quantize_bert, quantize_embeddings, student_bert_quant_type,
                                bert_pre_model, 
@@ -215,7 +215,7 @@ def get_pretrained_bert_ckpt(quantize_bert, quantize_embeddings, bert_pre_model,
                              student=False):
     if local_load:
         if manual_load_ckpt is None:
-            data_path = Path(__file__).parent.parent.joinpath(f"./model_checkpoints/model_ckpts/bitbert/train")
+            data_path = Path(__file__).parent.parent.joinpath(f"./model_checkpoints/model_ckpts/bittrans/train")
             if student:
                 if quantize_bert:
                     if bert_quant_type == "PTQ":
@@ -226,10 +226,10 @@ def get_pretrained_bert_ckpt(quantize_bert, quantize_embeddings, bert_pre_model,
                         pretrained_bert_ckpt = './qat/{}_{}_{}/checkpoint.pth'.format(bert_pre_model, quant_name, dataset_name)
                 else:
                     if quantize_embeddings:
-                        print("A full-precision transformer with quantized embedding weights is being used in BitBERTGCN.")
+                        print("A full-precision transformer with quantized embedding weights is being used in BitTransGNN.")
                         pretrained_bert_ckpt = './qat/embed_quant/{}_{}_{}/checkpoint.pth'.format(bert_pre_model, quant_name, dataset_name)
                     else:
-                        print("A full-precision transformer with full-precision embedding weights is being used in BitBERTGCN.")
+                        print("A full-precision transformer with full-precision embedding weights is being used in BitTransGNN.")
                         pretrained_bert_ckpt = "./full_prec/{}_{}/checkpoint.pth".format(bert_pre_model, dataset_name)
             else:
                 if quantize_bert:
@@ -239,17 +239,17 @@ def get_pretrained_bert_ckpt(quantize_bert, quantize_embeddings, bert_pre_model,
                     elif bert_quant_type == "QAT":
                         print("A QAFT BERT model is being used.")
                         if quantize_embeddings:
-                            print("A quantized transformer with quantized embedding weights is being used in BitBERTGCN.")
+                            print("A quantized transformer with quantized embedding weights is being used in BitTransGNN.")
                             pretrained_bert_ckpt = './qat/full_quant/{}_{}_{}/checkpoint.pth'.format(bert_pre_model, quant_name, dataset_name)
                         else:
-                            print("A quantized transformer with full-precision embedding weights is being used in BitBERTGCN.")
+                            print("A quantized transformer with full-precision embedding weights is being used in BitTransGNN.")
                             pretrained_bert_ckpt = './qat/{}_{}_{}/checkpoint.pth'.format(bert_pre_model, quant_name, dataset_name)
                 else:
                     if quantize_embeddings:
-                        print("A full-precision transformer with quantized embedding weights is being used in BitBERTGCN.")
+                        print("A full-precision transformer with quantized embedding weights is being used in BitTransGNN.")
                         pretrained_bert_ckpt = './qat/embed_quant/{}_{}_{}/checkpoint.pth'.format(bert_pre_model, quant_name, dataset_name)
                     else:
-                        print("A full-precision transformer with full-precision embedding weights is being used in BitBERTGCN.")
+                        print("A full-precision transformer with full-precision embedding weights is being used in BitTransGNN.")
                         pretrained_bert_ckpt = "./full_prec/{}_{}/checkpoint.pth".format(bert_pre_model, dataset_name)
             if num_bits_act not in [8.0, 32.0]:
                 pretrained_bert_ckpt += "_quant_act"
@@ -267,7 +267,7 @@ def get_pretrained_bert_ckpt(quantize_bert, quantize_embeddings, bert_pre_model,
         from comet_ml import API
         if experiment_name is None and experiment_load_key is None:
             raise Exception("You must enter an experiment name or an experiment key from Type 3 or Type 4 models to load the BERT model.")
-        load_project_name=f"bitbert_train"
+        load_project_name=f"bittrans_train"
         api = API(api_key=api_key)
         loaded_exp = api.get_experiment(workspace, load_project_name, experiment_load_key)
         print("experiment key being loaded: ", experiment_load_key)
@@ -277,37 +277,37 @@ def get_pretrained_bert_ckpt(quantize_bert, quantize_embeddings, bert_pre_model,
         print("ckpt now loaded")
     return ckpt
 
-def load_bitbertgcn_for_inference(model_type, bert_pre_model,
+def load_bittransgnn_for_inference(model_type, bert_pre_model,
                                   quantize_bert, quantize_embeddings, 
                                   bert_quant_type, 
                                   train_state, quant_name, 
                                   dataset_name, 
                                   local_load=None, manual_load_ckpt=None, 
                                   workspace=None, api_key=None, experiment_name=None, experiment_load_key=None,
-                                  bitbertgcn_inference_type="transductive"):
+                                  bittransgnn_inference_type="transductive"):
     if local_load:
         if manual_load_ckpt is None:
-            data_path = Path(__file__).parent.parent.joinpath(f"./model_checkpoints/model_ckpts/{model_type}/train/{bitbertgcn_inference_type}")
+            data_path = Path(__file__).parent.parent.joinpath(f"./model_checkpoints/model_ckpts/{model_type}/train/{bittransgnn_inference_type}")
             if quantize_bert and quantize_embeddings:
-                bitbertgcn_ckpt = './full_quant/{}_{}_{}_{}_{}/checkpoint.pth'.format(bert_pre_model, bert_quant_type, train_state, quant_name, dataset_name)
+                bittransgnn_ckpt = './full_quant/{}_{}_{}_{}_{}/checkpoint.pth'.format(bert_pre_model, bert_quant_type, train_state, quant_name, dataset_name)
             elif quantize_bert and not(quantize_embeddings):
-                bitbertgcn_ckpt = './{}_{}_{}_{}_{}/checkpoint.pth'.format(bert_pre_model, bert_quant_type, train_state, quant_name, dataset_name)
+                bittransgnn_ckpt = './{}_{}_{}_{}_{}/checkpoint.pth'.format(bert_pre_model, bert_quant_type, train_state, quant_name, dataset_name)
             elif not(quantize_bert) and quantize_embeddings:
-                bitbertgcn_ckpt = './embed_quant/{}_{}_{}_{}_{}/checkpoint.pth'.format(bert_pre_model, bert_quant_type, train_state, quant_name, dataset_name)
+                bittransgnn_ckpt = './embed_quant/{}_{}_{}_{}_{}/checkpoint.pth'.format(bert_pre_model, bert_quant_type, train_state, quant_name, dataset_name)
             else:
-                bitbertgcn_ckpt = './{}_{}_{}_{}_{}/checkpoint.pth'.format(bert_pre_model, bert_quant_type, train_state, quant_name, dataset_name) 
-            bitbertgcn_ckpt = data_path.joinpath(data_path, bitbertgcn_ckpt)
+                bittransgnn_ckpt = './{}_{}_{}_{}_{}/checkpoint.pth'.format(bert_pre_model, bert_quant_type, train_state, quant_name, dataset_name) 
+            bittransgnn_ckpt = data_path.joinpath(data_path, bittransgnn_ckpt)
         else:
-            bitbertgcn_ckpt = manual_load_ckpt
+            bittransgnn_ckpt = manual_load_ckpt
         
-        print("bitbertgcn_ckpt", bitbertgcn_ckpt)
-        ckpt = torch.load(bitbertgcn_ckpt, map_location="cpu")
+        print("bittransgnn_ckpt", bittransgnn_ckpt)
+        ckpt = torch.load(bittransgnn_ckpt, map_location="cpu")
         print("ckpt now loaded")
     else:
         from comet_ml import API
         if experiment_name is None and experiment_load_key is None:
-            raise Exception("You must enter an experiment name or an experiment key from the previously trained BitBERTGCN models to load the BERT model.")
-        load_project_name=f"bitbertgcn"
+            raise Exception("You must enter an experiment name or an experiment key from the previously trained BitTransGNN models to load the BERT model.")
+        load_project_name=f"bittransgnn"
         api = API(api_key=api_key)
         loaded_exp = api.get_experiment(workspace, load_project_name, experiment_load_key)
         ckpt_asset = loaded_exp.get_asset_by_name("model-data/comet-torch-model.pth", return_type="binary")
@@ -316,18 +316,18 @@ def load_bitbertgcn_for_inference(model_type, bert_pre_model,
         print("ckpt now loaded")
     return ckpt
 
-def get_pretrained_teacher_bitbertgcn_ckpt(model_type, bert_pre_model, distillation_type,
+def get_pretrained_teacher_bittransgnn_ckpt(model_type, bert_pre_model, distillation_type,
                                      quantize_teacher_bert, quantize_teacher_embeddings, 
                                      teacher_bert_quant_type, 
                                      train_state, teacher_quant_name, 
                                      dataset_name, 
                                      student_ckpt=None, local_load=None, manual_load_ckpt=None, 
                                      workspace=None, api_key=None, experiment_name=None, experiment_load_key=None,
-                                     bitbertgcn_inference_type="transductive"):
+                                     bittransgnn_inference_type="transductive"):
     if distillation_type == "offline":
         if local_load:
             if manual_load_ckpt is None:
-                data_path = Path(__file__).parent.parent.joinpath(f"./model_checkpoints/model_ckpts/{model_type}/train/{bitbertgcn_inference_type}")
+                data_path = Path(__file__).parent.parent.joinpath(f"./model_checkpoints/model_ckpts/{model_type}/train/{bittransgnn_inference_type}")
                 if quantize_teacher_bert and quantize_teacher_embeddings:
                     teacher_ckpt = './full_quant/{}_{}_{}_{}_{}/checkpoint.pth'.format(bert_pre_model, teacher_bert_quant_type, train_state, teacher_quant_name, dataset_name)
                 elif quantize_teacher_bert and not(quantize_teacher_embeddings):
@@ -347,7 +347,7 @@ def get_pretrained_teacher_bitbertgcn_ckpt(model_type, bert_pre_model, distillat
             from comet_ml import API
             if experiment_name is None and experiment_load_key is None:
                 raise Exception("You must enter an experiment name or an experiment key from Type 3 or Type 4 models to load the BERT model.")
-            load_project_name="bitbertgcn"
+            load_project_name="bittransgnn"
             api = API(api_key=api_key)
             loaded_exp = api.get_experiment(workspace, load_project_name, experiment_load_key)
             print("experiment key being loaded: ", experiment_load_key)
@@ -359,7 +359,7 @@ def get_pretrained_teacher_bitbertgcn_ckpt(model_type, bert_pre_model, distillat
         ckpt = student_ckpt
     return ckpt
 
-def load_bitbertgcn_kd_student_for_inference(quantize_bert, quantize_embeddings, 
+def load_bittransgnn_kd_student_for_inference(quantize_bert, quantize_embeddings, 
                                              bert_pre_model, student_quant_name, 
                                              dataset_name, student_bert_quant_type, 
                                              num_bits_act=8.0, 
@@ -367,10 +367,10 @@ def load_bitbertgcn_kd_student_for_inference(quantize_bert, quantize_embeddings,
                                              experiment_name=None, experiment_load_key=None, 
                                              api_key=None, workspace=None,
                                              model_type=None, train_state=None,
-                                             bitbertgcn_inference_type="transductive"):
+                                             bittransgnn_inference_type="transductive"):
     if local_load:
         if manual_load_ckpt is None:
-            data_path = Path(__file__).parent.parent.joinpath(f"./model_checkpoints/model_ckpts/distill/{model_type}/train/{bitbertgcn_inference_type}")
+            data_path = Path(__file__).parent.parent.joinpath(f"./model_checkpoints/model_ckpts/distill/{model_type}/train/{bittransgnn_inference_type}")
             if quantize_bert and quantize_embeddings:
                 student_ckpt = './full_quant/{}_{}_student_{}_{}_{}/checkpoint.pth'.format(bert_pre_model, student_bert_quant_type, train_state, student_quant_name, dataset_name)
             elif quantize_bert and not(quantize_embeddings):
@@ -390,8 +390,8 @@ def load_bitbertgcn_kd_student_for_inference(quantize_bert, quantize_embeddings,
     else:
         from comet_ml import API
         if experiment_name is None and experiment_load_key is None:
-            raise Exception("You must enter an experiment name or an experiment key from the previously trained BitBERTGCN models to load the BERT model.")
-        load_project_name="bitbertgcn_kd"
+            raise Exception("You must enter an experiment name or an experiment key from the previously trained BitTransGNN models to load the BERT model.")
+        load_project_name="bittransgnn_kd"
         api = API(api_key=api_key)
         loaded_exp = api.get_experiment(workspace, load_project_name, experiment_load_key)
         ckpt_asset = loaded_exp.get_asset_by_name("model-data/comet-torch-model.pth", return_type="binary")

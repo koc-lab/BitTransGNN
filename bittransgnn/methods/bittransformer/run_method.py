@@ -3,14 +3,14 @@ import os
 import torch
 from torch.optim import lr_scheduler
 
-from utils import get_quant_name, set_bitbert_ckpt_dir, get_pretrained_bert_ckpt
+from utils import get_quant_name, set_bittrans_ckpt_dir, get_pretrained_bert_ckpt
 from quantization.binarize_model import quantize_bitbert_for_inference
 from data.loader.dataloaders import TextDataObject
-from models import BertClassifier
-from trainers import BitBERTTrainer
-from inference_engines import BitBERTInference
+from models import BitTransformer
+from trainers import BitTransformerTrainer
+from inference_engines import BitTransformerInference
 
-def run_bitbert(config):
+def run_bittransformer(config):
     exp_configs = config["experiment_configs"]
     model_configs = config["model_configs"]
     parameters = config["parameters"]
@@ -24,7 +24,7 @@ def run_bitbert(config):
 
     quant_name = get_quant_name(num_states)
 
-    ckpt_dir_dict = set_bitbert_ckpt_dir(checkpoint_dir, quantize_bert, quantize_embeddings, bert_pre_model, quant_name, dataset_name, num_bits_act)
+    ckpt_dir_dict = set_bittrans_ckpt_dir(checkpoint_dir, quantize_bert, quantize_embeddings, bert_pre_model, quant_name, dataset_name, num_bits_act)
     if save_ckpt:
         print("model_ckpt_dir", ckpt_dir_dict["model_ckpt_dir"])
         os.makedirs(ckpt_dir_dict["model_ckpt_dir"], exist_ok=True)
@@ -33,7 +33,7 @@ def run_bitbert(config):
     nb_class = text_data.nb_class
     
     regression = dataset_name == "stsb"
-    model = BertClassifier(pretrained_model=bert_pre_model, nb_class=nb_class, quantize=quantize_bert, num_states=num_states, quantize_embeddings=quantize_embeddings, num_bits_act=num_bits_act, regression=regression)
+    model = BitTransformer(pretrained_model=bert_pre_model, nb_class=nb_class, quantize=quantize_bert, num_states=num_states, quantize_embeddings=quantize_embeddings, num_bits_act=num_bits_act, regression=regression)
     model = model.to(device)
     text_data.set_dataloaders_bert(model, max_length)
 
@@ -41,11 +41,11 @@ def run_bitbert(config):
     milestone = nb_epochs//2
     scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[milestone], gamma=0.1)
 
-    trainer = BitBERTTrainer(model, dataset_name, optimizer, scheduler, text_data, device, eval_test, eval_test_every_n_epochs)
+    trainer = BitTransformerTrainer(model, dataset_name, optimizer, scheduler, text_data, device, eval_test, eval_test_every_n_epochs)
     model_checkpoint, best_metrics = trainer.run(nb_epochs, patience, report_time, ckpt_dir_dict["model_ckpt_dir"])
     return model_checkpoint, ckpt_dir_dict, best_metrics
 
-def run_bitbert_for_inference(config):
+def run_bittransformer_for_inference(config):
     exp_configs = config["experiment_configs"]
     model_configs = config["model_configs"]
     parameters = config["parameters"]
@@ -56,7 +56,7 @@ def run_bitbert_for_inference(config):
     local_load, manual_load_ckpt = load_configs["local_load"], load_configs["manual_load_ckpt"]
     workspace, api_key, experiment_load_name, experiment_load_key = load_configs["workspace"], load_configs["api_key"], load_configs["experiment_load_name"], load_configs["experiment_load_key"]
     batch_size = parameters["batch_size"]
-    loaded_bitbert_quant_type = parameters["bert_quant_type"]
+    loaded_bittrans_quant_type = parameters["bert_quant_type"]
     checkpoint_dir = exp_configs["checkpoint_dir"]
 
     quant_name = get_quant_name(num_states)
@@ -64,22 +64,22 @@ def run_bitbert_for_inference(config):
     text_data = TextDataObject(dataset_name, batch_size)
     nb_class = text_data.nb_class
 
-    ckpt = get_pretrained_bert_ckpt(quantize_bert, quantize_embeddings, bert_pre_model, quant_name, dataset_name, loaded_bitbert_quant_type, 
+    ckpt = get_pretrained_bert_ckpt(quantize_bert, quantize_embeddings, bert_pre_model, quant_name, dataset_name, loaded_bittrans_quant_type, 
                                     num_bits_act, 
                                     local_load, manual_load_ckpt, 
                                     experiment_load_name, experiment_load_key, 
                                     api_key, workspace,
                                     student=False)
     
-    log_dir_dict = set_bitbert_ckpt_dir(checkpoint_dir, quantize_bert, quantize_embeddings, bert_pre_model, quant_name, dataset_name, num_bits_act, inference=True)
+    log_dir_dict = set_bittrans_ckpt_dir(checkpoint_dir, quantize_bert, quantize_embeddings, bert_pre_model, quant_name, dataset_name, num_bits_act, inference=True)
 
     regression = dataset_name == "stsb"
-    model = BertClassifier(pretrained_model=bert_pre_model, nb_class=nb_class, quantize=quantize_bert, num_states=num_states, quantize_embeddings=quantize_embeddings, num_bits_act=num_bits_act, regression=regression)
-    joint_training = False #not applicable but set to False since quantize_bitbert_for_inference() is used for inference with both BitBERT and BitBERTGCN models
-    model = quantize_bitbert_for_inference(model, ckpt, joint_training, quantize_bert, num_states, loaded_bitbert_quant_type, quantize_embeddings, num_bits_act)
+    model = BitTransformer(pretrained_model=bert_pre_model, nb_class=nb_class, quantize=quantize_bert, num_states=num_states, quantize_embeddings=quantize_embeddings, num_bits_act=num_bits_act, regression=regression)
+    joint_training = False #not applicable but set to False since quantize_bittranss_for_inference() is used for inference with both BitTransformer and BitTransGNN models
+    model = quantize_bitbert_for_inference(model, ckpt, joint_training, quantize_bert, num_states, loaded_bittrans_quant_type, quantize_embeddings, num_bits_act)
     model = model.to(device)
     text_data.set_dataloaders_bert(model, max_length)
 
-    inference_engine = BitBERTInference(model, dataset_name, text_data, device)
+    inference_engine = BitTransformerInference(model, dataset_name, text_data, device)
     inference_metrics = inference_engine.run(report_time)
     return inference_metrics, log_dir_dict

@@ -2,14 +2,14 @@ import os
 
 import torch
 
-from utils import get_quant_name, get_train_state, get_model_type, set_bitbertgcn_ckpt_dir, get_pretrained_bert_ckpt, load_bitbertgcn_for_inference
+from utils import get_quant_name, get_train_state, get_model_type, set_bittransgnn_ckpt_dir, get_pretrained_bert_ckpt, load_bittransgnn_for_inference
 from data.loader.dataloaders import GraphDataObject
-from models import BitBERTGCN
-from trainers import BitBERTGCNTrainer
-from inference_engines import BitBERTGCNInference
+from models import BitTransGNN
+from trainers import BitTransGNNTrainer
+from inference_engines import BitTransGNNInference
 from quantization.binarize_model import quantize_bertgcn_architecture, quantize_bitbertgcn_for_inference
 
-def run_bitbertgcn(config):
+def run_bittransgnn(config):
     exp_configs = config["experiment_configs"]
     model_configs = config["model_configs"]
     parameters = config["parameters"]
@@ -36,7 +36,7 @@ def run_bitbertgcn(config):
     train_state = get_train_state(joint_training)
     model_type = get_model_type(quantize_bert, quantize_gcn)
     
-    ckpt_dir_dict = set_bitbertgcn_ckpt_dir(checkpoint_dir, 
+    ckpt_dir_dict = set_bittransgnn_ckpt_dir(checkpoint_dir, 
                                             model_type, 
                                             quantize_bert, quantize_embeddings, bert_quant_type, 
                                             bert_pre_model, 
@@ -55,7 +55,7 @@ def run_bitbertgcn(config):
     
     nb_class = graph_data.nb_class
     regression = dataset_name == "stsb"
-    model = BitBERTGCN(pretrained_model=bert_pre_model, joint_training=joint_training,
+    model = BitTransGNN(pretrained_model=bert_pre_model, joint_training=joint_training,
                          quantize_gcn=quantize_gcn, gcn_num_states=gcn_num_states,
                          nb_class=nb_class, lmbd=lmbd, gcn_layers=gcn_layers, n_hidden=n_hidden, dropout=dropout,
                          regression=regression)
@@ -85,11 +85,11 @@ def run_bitbertgcn(config):
         )
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[nb_epochs//2], gamma=0.1)
 
-    trainer = BitBERTGCNTrainer(model, dataset_name, optimizer, scheduler, graph_data, joint_training, device, batch_size, inductive, eval_test, eval_test_every_n_epochs)
+    trainer = BitTransGNNTrainer(model, dataset_name, optimizer, scheduler, graph_data, joint_training, device, batch_size, inductive, eval_test, eval_test_every_n_epochs)
     model_checkpoint, best_metrics = trainer.run(nb_epochs, patience, report_time)
     return model_checkpoint, ckpt_dir_dict, best_metrics
 
-def run_bitbertgcn_for_inference(config):
+def run_bittransgnn_for_inference(config):
     exp_configs = config["experiment_configs"]
     model_configs = config["model_configs"]
     parameters = config["parameters"]
@@ -101,7 +101,7 @@ def run_bitbertgcn_for_inference(config):
     lmbd, gcn_layers = parameters["lmbd"], parameters["gcn_layers"]
     workspace, api_key, experiment_load_name, experiment_load_key = load_configs["workspace"], load_configs["api_key"], load_configs["experiment_load_name"], load_configs["experiment_load_key"]
     local_load, manual_load_ckpt = load_configs["local_load"], load_configs["manual_load_ckpt"]
-    loaded_bitbert_quant_type = parameters["bert_quant_type"]
+    loaded_bittrans_quant_type = parameters["bert_quant_type"]
     checkpoint_dir = exp_configs["checkpoint_dir"]
     inference_type = exp_configs["inference_type"]
 
@@ -120,32 +120,32 @@ def run_bitbertgcn_for_inference(config):
     nb_class = graph_data.nb_class
 
     regression = dataset_name == "stsb"
-    model = BitBERTGCN(pretrained_model=bert_pre_model, joint_training=joint_training,
+    model = BitTransGNN(pretrained_model=bert_pre_model, joint_training=joint_training,
                          quantize_gcn=quantize_gcn, gcn_num_states=gcn_num_states,
                          nb_class=nb_class, lmbd=lmbd, gcn_layers=gcn_layers, n_hidden=n_hidden, dropout=dropout,
                          regression=regression)
     graph_data.set_transformer_data(model, max_length)
     graph_data.set_graph_data(model)
 
-    ckpt = load_bitbertgcn_for_inference(model_type, bert_pre_model,
+    ckpt = load_bittransgnn_for_inference(model_type, bert_pre_model,
                                          quantize_bert, quantize_embeddings, 
-                                         loaded_bitbert_quant_type, 
+                                         loaded_bittrans_quant_type, 
                                          train_state, quant_name, 
                                          dataset_name,
                                          local_load, manual_load_ckpt, 
                                          workspace, api_key, 
                                          experiment_load_name, experiment_load_key,
-                                         bitbertgcn_inference_type=inference_type)
+                                         bittransgnn_inference_type=inference_type)
 
-    log_dir_dict = set_bitbertgcn_ckpt_dir(checkpoint_dir, model_type, quantize_bert, quantize_embeddings, loaded_bitbert_quant_type, bert_pre_model, train_state, quant_name, dataset_name, num_bits_act, inference=True, inference_type=inference_type)
+    log_dir_dict = set_bittransgnn_ckpt_dir(checkpoint_dir, model_type, quantize_bert, quantize_embeddings, loaded_bittrans_quant_type, bert_pre_model, train_state, quant_name, dataset_name, num_bits_act, inference=True, inference_type=inference_type)
 
     model = quantize_bitbertgcn_for_inference(model, ckpt, 
                                               joint_training, 
-                                              quantize_bert, num_states, loaded_bitbert_quant_type, quantize_embeddings, 
+                                              quantize_bert, num_states, loaded_bittrans_quant_type, quantize_embeddings, 
                                               num_bits_act)
     
     model = model.to(device)
 
-    inference_engine = BitBERTGCNInference(model, dataset_name, graph_data, joint_training, device, batch_size, inductive)
+    inference_engine = BitTransGNNInference(model, dataset_name, graph_data, joint_training, device, batch_size, inductive)
     inference_metrics = inference_engine.run(report_time)
     return inference_metrics, log_dir_dict

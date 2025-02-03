@@ -2,7 +2,7 @@ from pathlib import Path
 
 import yaml
 
-from .run_method import run_bitbertgcn_kd
+from .run_method import run_bittransgnn_kd
 from logger import Logger
 from utils import get_model_type, get_train_state, set_seed
 
@@ -59,11 +59,11 @@ for experiment in optimizer.get_experiments():
     print(iter_parameters_sweep)
     iter_config = {"experiment_configs": exp_configs, "model_configs": model_configs, "load_configs": load_configs, "parameters": iter_parameters}
     experiment.log_parameters(iter_config)
-    model_checkpoint, ckpt_dir, best_metrics = run_bitbertgcn_kd(iter_config)
+    model_checkpoint, ckpt_dir, best_metrics = run_bittransgnn_kd(iter_config)
     log_ckpt, save_ckpt = exp_configs["log_ckpt"], exp_configs["save_ckpt"]
     logger = Logger(log_configs["comet"], log_configs["pandas_df"], log_configs["wandb"], log_ckpt, save_ckpt)
     logger.log(config, best_metrics, 
-                model_name="bitbertgcn_kd", project_name="bitbertgcn_kd", 
+                model_name="bittransgnn_kd", project_name="bittransgnn_kd", 
                 model_checkpoint=model_checkpoint, ckpt_dir=ckpt_dir,
                 experiment=experiment)
     experiment.end()
