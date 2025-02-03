@@ -42,8 +42,8 @@ def run_bittransformer(config):
     scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[milestone], gamma=0.1)
 
     trainer = BitTransformerTrainer(model, dataset_name, optimizer, scheduler, text_data, device, eval_test, eval_test_every_n_epochs)
-    model_checkpoint, best_metrics = trainer.run(nb_epochs, patience, report_time, ckpt_dir_dict["model_ckpt_dir"])
-    return model_checkpoint, ckpt_dir_dict, best_metrics
+    model_checkpoint, best_metrics, logits = trainer.run(nb_epochs, patience, report_time, ckpt_dir_dict["model_ckpt_dir"])
+    return model_checkpoint, ckpt_dir_dict, best_metrics, logits
 
 def run_bittransformer_for_inference(config):
     exp_configs = config["experiment_configs"]
@@ -81,5 +81,5 @@ def run_bittransformer_for_inference(config):
     text_data.set_dataloaders_bert(model, max_length)
 
     inference_engine = BitTransformerInference(model, dataset_name, text_data, device)
-    inference_metrics = inference_engine.run(report_time)
-    return inference_metrics, log_dir_dict
+    inference_metrics, logits = inference_engine.run(report_time)
+    return inference_metrics, log_dir_dict, logits

@@ -62,11 +62,12 @@ for experiment in optimizer.get_experiments():
     print(iter_parameters_sweep)
     iter_config = {"experiment_configs": exp_configs, "model_configs": model_configs, "load_configs": load_configs, "parameters": iter_parameters}
     experiment.log_parameters(iter_config)
-    model_checkpoint, ckpt_dir, best_metrics = run_bittransgnn(iter_config)
-    log_ckpt, save_ckpt = exp_configs["log_ckpt"], exp_configs["save_ckpt"]
+    model_checkpoint, ckpt_dir, best_metrics, logits = run_bittransgnn(iter_config)
+    log_ckpt, save_ckpt, save_logits = exp_configs["log_ckpt"], exp_configs["save_ckpt"], exp_configs["save_logits"]
     experiment.log_metrics(best_metrics)
-    logger = Logger(log_configs["comet"], log_configs["pandas_df"], log_configs["wandb"], log_ckpt, save_ckpt)
-    logger.log(iter_config, best_metrics, 
+    logger = Logger(log_configs["comet"], log_configs["pandas_df"], log_configs["wandb"], log_ckpt, save_ckpt, save_logits,
+                    api_key=log_configs["api_key"], workspace=log_configs["workspace"])
+    logger.log(iter_config, best_metrics, logits,
                 model_name="bittransgnn", project_name="bittransgnn", 
                 model_checkpoint=model_checkpoint, ckpt_dir=ckpt_dir,
                 experiment=experiment)

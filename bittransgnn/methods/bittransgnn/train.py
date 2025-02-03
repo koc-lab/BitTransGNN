@@ -15,12 +15,12 @@ model_configs = config["model_configs"]
 parameters = config["parameters"]
 log_configs = config["log_configs"]
 set_seed(exp_configs["seed"])
-model_checkpoint, ckpt_dir, best_metrics = run_bittransgnn(config)
-log_ckpt, save_ckpt = exp_configs["log_ckpt"], exp_configs["save_ckpt"]
+model_checkpoint, ckpt_dir, best_metrics, logits = run_bittransgnn(config)
+log_ckpt, save_ckpt, save_logits = exp_configs["log_ckpt"], exp_configs["save_ckpt"], exp_configs["save_logits"]
 model_configs["model_type"] = get_model_type(model_configs["quantize_bert"], model_configs["quantize_gcn"])
 model_configs["train_state"] = get_train_state(parameters["joint_training"])
-logger = Logger(log_configs["comet"], log_configs["pandas_df"], log_configs["wandb"], log_ckpt, save_ckpt,
+logger = Logger(log_configs["comet"], log_configs["pandas_df"], log_configs["wandb"], log_ckpt, save_ckpt, save_logits,
                 api_key=log_configs["api_key"], workspace=log_configs["workspace"])
-logger.log(config, best_metrics, 
+logger.log(config, best_metrics, logits,
             model_name="bittransgnn", project_name="bittransgnn", 
             model_checkpoint=model_checkpoint, ckpt_dir=ckpt_dir)

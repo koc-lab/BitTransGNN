@@ -114,8 +114,8 @@ def run_bittransgnn_kd(config):
                                   teacher_optimizer, teacher_scheduler,
                                   inductive,
                                   eval_test, eval_test_every_n_epochs)
-    model_checkpoint, best_metrics = trainer.run(nb_epochs, patience, report_time)
-    return model_checkpoint, ckpt_dir_dict, best_metrics    
+    model_checkpoint, best_metrics, logits = trainer.run(nb_epochs, patience, report_time)
+    return model_checkpoint, ckpt_dir_dict, best_metrics, logits
 
 def run_bittransgnn_kd_for_inference(config):
     exp_configs = config["experiment_configs"]
@@ -164,5 +164,5 @@ def run_bittransgnn_kd_for_inference(config):
 
     inference_engine = BitTransformerInference(student_model, dataset_name, text_data, device)    
 
-    inference_metrics = inference_engine.run(report_time)
-    return inference_metrics, ckpt_dir_dict
+    inference_metrics, logits = inference_engine.run(report_time)
+    return inference_metrics, ckpt_dir_dict, logits

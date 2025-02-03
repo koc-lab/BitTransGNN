@@ -1,3 +1,5 @@
+import copy
+
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -9,7 +11,6 @@ from torch_geometric.nn import GCNConv
 
 from quantization.binarize_model import quantize_tf_model
 from quantization.binary_layers import BitLinear
-
 
 class GCNConvTorch(nn.Module):
     def __init__(self, in_features, out_features, bias=True, quantize=False, num_states=2):
@@ -83,12 +84,13 @@ class BitTransformer(nn.Module):
     def forward(self, input_ids, attention_mask):
         cls_feats = self.bert_model(input_ids, attention_mask)[0][:, 0]
         cls_logit = self.classifier(cls_feats)
+        logits = {"cls_logit": copy.deepcopy(cls_logit)}
         if self.regression:
             pred = cls_logit
         else:
             pred = nn.Softmax(dim=1)(cls_logit)
             pred = torch.log(pred)
-        return pred
+        return pred, logits
     
 class BitTransGNN(nn.Module):
     def __init__(self, pretrained_model='roberta-base', joint_training=True, quantize_gcn=False, gcn_num_states=2, nb_class=20, lmbd=0.7, gcn_layers=2, n_hidden=200, dropout=0.5, regression=False):
@@ -115,14 +117,18 @@ class BitTransGNN(nn.Module):
             cls_feats = graph_data.cls_feats[idx]
         cls_logit = self.classifier(cls_feats)
         gcn_logit = self.gcn(x=graph_data.cls_feats, adj=graph_data.adj_sparse)[idx]
+        logits = {"cls_logit": copy.deepcopy(cls_logit), "gcn_logit": copy.deepcopy(gcn_logit)}
         if self.regression:
             gcn_pred, cls_pred = gcn_logit, cls_logit
             pred = gcn_pred * self.lmbd + cls_pred * (1 - self.lmbd)
         else:
             cls_pred = nn.Softmax(dim=1)(cls_logit/temperature)
             gcn_pred = nn.Softmax(dim=1)(gcn_logit/temperature)
+            cls_soft_pred = nn.Softmax(dim=1)(cls_logit/temperature)
+            gcn_soft_pred = nn.Softmax(dim=1)(gcn_logit/temperature)
             pred = (gcn_pred+1e-10) * self.lmbd + cls_pred * (1 - self.lmbd)
-        return pred
+            soft_pred = (gcn_soft_pred+1e-10) * self.lmbd + cls_soft_pred * (1 - self.lmbd)
+        return pred, soft_pred, logits
 
 class BitTransformerStudent(nn.Module):
     def __init__(self, pretrained_model='roberta-base', nb_class=20, regression=False):
@@ -137,6 +143,7 @@ class BitTransformerStudent(nn.Module):
         input_ids, attention_mask = graph_data.input_ids[idx], graph_data.attention_mask[idx]
         cls_feats = self.bert_model(input_ids, attention_mask)[0][:, 0]
         cls_logit = self.classifier(cls_feats)
+        logits = {"cls_logit": cls_logit.clone()}
         if self.regression:
             pred, soft_pred = cls_logit, cls_logit
         else:
@@ -144,5 +151,5 @@ class BitTransformerStudent(nn.Module):
             pred = torch.log(pred)
             soft_pred = nn.Softmax(dim=1)(cls_logit/temperature)
             soft_pred = torch.log(soft_pred)
-        return pred, soft_pred
+        return pred, soft_pred, logits
 

@@ -86,8 +86,8 @@ def run_bittransgnn(config):
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[nb_epochs//2], gamma=0.1)
 
     trainer = BitTransGNNTrainer(model, dataset_name, optimizer, scheduler, graph_data, joint_training, device, batch_size, inductive, eval_test, eval_test_every_n_epochs)
-    model_checkpoint, best_metrics = trainer.run(nb_epochs, patience, report_time)
-    return model_checkpoint, ckpt_dir_dict, best_metrics
+    model_checkpoint, best_metrics, logits = trainer.run(nb_epochs, patience, report_time)
+    return model_checkpoint, ckpt_dir_dict, best_metrics, logits
 
 def run_bittransgnn_for_inference(config):
     exp_configs = config["experiment_configs"]
@@ -147,5 +147,5 @@ def run_bittransgnn_for_inference(config):
     model = model.to(device)
 
     inference_engine = BitTransGNNInference(model, dataset_name, graph_data, joint_training, device, batch_size, inductive)
-    inference_metrics = inference_engine.run(report_time)
-    return inference_metrics, log_dir_dict
+    inference_metrics, logits = inference_engine.run(report_time)
+    return inference_metrics, log_dir_dict, logits

@@ -4,16 +4,17 @@ import os
 from utils import get_quant_name, get_train_state, get_model_type
 
 class Logger:
-    def __init__(self, comet, pandas_df, wandb, log_ckpt, save_ckpt, api_key=None, workspace=None):
+    def __init__(self, comet, pandas_df, wandb, log_ckpt, save_ckpt, save_logits, api_key=None, workspace=None):
         self.comet = comet
         self.pandas_df = pandas_df
         self.wandb = wandb
         self.log_ckpt = log_ckpt
         self.save_ckpt = save_ckpt
+        self.save_logits = save_logits
         self.api_key = api_key
         self.workspace = workspace
 
-    def log(self, config, best_metrics, 
+    def log(self, config, best_metrics, logits,
             model_name, project_name: Optional[str] = None, 
             model_checkpoint=None, ckpt_dir=None,
             experiment=None, parameters=None):
@@ -25,6 +26,8 @@ class Logger:
             self.wandb_logger(config, best_metrics, model_name, project_name, model_checkpoint)
         if self.save_ckpt:
             self.save_model_local(model_checkpoint, ckpt_dir["model_ckpt_dir"])
+        if self.save_logits:
+            self.save_model_logits(logits, ckpt_dir["logit_ckpt_dir"])
     
     def comet_logger(self, config, best_metrics, model_name: Optional[str] = None, project_name: Optional[str] = None, model_checkpoint=None, experiment=None, parameters=None):
         import comet_ml
@@ -38,7 +41,7 @@ class Logger:
                 exp.log_model(model_name, model_checkpoint)
         else:
             exp = comet_ml.Experiment(api_key=self.api_key, 
-                                    project_name=project_name, #bitbert_train
+                                    project_name=project_name, #bittrans_train
                                     workspace=self.workspace) 
             if parameters:
                 exp.log_parameters(parameters)
@@ -51,7 +54,7 @@ class Logger:
     def log_pandas_df(self, config, best_metrics, model_name, ckpt_dir):
         print(model_name)
         import pandas as pd
-        if model_name == "bitbert_train" or model_name == "bitbert_inference":
+        if model_name == "bittrans_train" or model_name == "bittrans_inference":
             log_dict = {"dataset": [], "bert_pre_model": [],
                            "quant_name": [], "bert_quant_type": [],
                            "seed": []}
@@ -66,7 +69,7 @@ class Logger:
             for best_metric_name in best_metrics.keys():
                 log_dict[best_metric_name].append(best_metrics[best_metric_name])
 
-        elif model_name == "bitbertgcn" or model_name == "bitbertgcn_inference" or model_name == "bitbertgcn_direct_seperation":
+        elif model_name == "bittransgnn" or model_name == "bittransgnn_inference" or model_name == "bittransgnn_direct_seperation":
             log_dict = {"dataset": [], "bert_pre_model": [],
                            "quant_name": [], "bert_quant_type": [],
                            "model_type": [], "train_state": [], "lmbd": [],
@@ -86,7 +89,7 @@ class Logger:
                 log_dict[best_metric_name].append(best_metrics[best_metric_name])
 
 
-        elif model_name == "bitbertgcn_kd" or model_name == "bitbertgcn_kd_inference":
+        elif model_name == "bittransgnn_kd" or model_name == "bittransgnn_kd_inference":
             log_dict = {"dataset": [], "bert_pre_model": [],
                            "teacher_quant_name": [], "teacher_bert_quant_type": [],
                            "student_quant_name": [], "student_bert_quant_type": [],
@@ -137,3 +140,10 @@ class Logger:
         print("ckpt_dir", ckpt_dir)
         os.makedirs(ckpt_dir, exist_ok=True)
         torch.save(model_checkpoint, os.path.join(ckpt_dir, "checkpoint.pth"))
+
+    def save_model_logits(self, model_logits, ckpt_dir):
+        import torch
+        print("Saving model logits to local machine...")
+        print("ckpt_dir", ckpt_dir)
+        os.makedirs(ckpt_dir, exist_ok=True)
+        torch.save(model_logits, os.path.join(ckpt_dir, "logits.pth"))

@@ -47,6 +47,6 @@ def run_bittransgnn_for_direct_seperation(config):
         text_data.set_dataloaders_bert(model, max_length)
 
         inference_engine = BitTransformerInference(model, dataset_name, text_data, device)
-        inference_metrics = inference_engine.run(report_time)
-        return inference_metrics, ckpt_dir_dict
+        inference_metrics, logits = inference_engine.run(report_time)
+        return inference_metrics, ckpt_dir_dict, logits
 

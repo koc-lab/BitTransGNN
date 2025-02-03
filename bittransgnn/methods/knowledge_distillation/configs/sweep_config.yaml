@@ -37,6 +37,7 @@ experiment_configs:
   manual_load_ckpt: !!null
   log_ckpt: False
   save_ckpt: False
+  save_logits: False
   report_time: False
   checkpoint_dir: !!null
   nb_epochs: 100

@@ -35,10 +35,10 @@ for dataset_name in exp_configs["dataset_name"]:
             iter_model_configs["num_states"] = num_states
             iter_model_configs["quantize_bert"] = quantize_bert
             iter_config = {"experiment_configs": iter_exp_configs, "model_configs": iter_model_configs, "parameters": parameters_log}
-            model_checkpoint, ckpt_dir, best_metrics = run_bittransformer(iter_config)
-            log_ckpt, save_ckpt = exp_configs["log_ckpt"], exp_configs["save_ckpt"]
-            logger = Logger(log_configs["comet"], log_configs["pandas_df"], log_configs["wandb"], log_ckpt, save_ckpt,
+            model_checkpoint, ckpt_dir, best_metrics, logits = run_bittransformer(iter_config)
+            log_ckpt, save_ckpt, save_logits = exp_configs["log_ckpt"], exp_configs["save_ckpt"], exp_configs["save_logits"]
+            logger = Logger(log_configs["comet"], log_configs["pandas_df"], log_configs["wandb"], log_ckpt, save_ckpt, save_logits,
                             api_key=log_configs["api_key"], workspace=log_configs["workspace"])
-            logger.log(iter_config, best_metrics, 
+            logger.log(iter_config, best_metrics, logits,
                         model_name="bittrans_train", project_name="bittrans_train", 
                         model_checkpoint=model_checkpoint, ckpt_dir=ckpt_dir, parameters=parameters_log)

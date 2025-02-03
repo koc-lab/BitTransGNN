@@ -11,7 +11,7 @@ spec:
 
 log_configs:
   comet: True
-  pandas_df: True
+  pandas_df: False
   wandb: False
   project_name: bittransgnn-train
   workspace: !!null #you should enter the name of your Comet workspace here
@@ -33,6 +33,7 @@ experiment_configs:
   device: "cuda:0"
   log_ckpt: False
   save_ckpt: False
+  save_logits: False
   report_time: False
   checkpoint_dir: !!null
   nb_epochs: 100

@@ -1,8 +1,8 @@
 name: bittransgnn-kd
 
 log_configs:
-  comet: True
-  pandas_df: True
+  comet: False
+  pandas_df: False
   wandb: False
   workspace: !!null #you should enter the name of your Comet workspace here
   api_key: !!null #you should enter the api_key of your Comet account here
@@ -24,6 +24,7 @@ experiment_configs:
   distillation_type: "offline"
   log_ckpt: False
   save_ckpt: True
+  save_logits: True
   report_time: False
   checkpoint_dir: !!null
   nb_epochs: 100
