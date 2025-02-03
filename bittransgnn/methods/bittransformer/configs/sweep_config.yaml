@@ -1,0 +1,36 @@
+name: bittrans-train
+
+log_configs:
+  comet: True
+  pandas_df: False
+  wandb: False
+  project_name: bittrans-train
+  workspace: !!null #you should enter the name of your Comet workspace here
+  api_key: !!null #you should enter the api_key of your Comet account here
+
+experiment_configs:
+  seed: [0,1,2,3,4]
+  dataset_name: ["mr", "R8", "R52", "ohsumed"]
+  bert_pre_model: "roberta-base"
+  device: "cuda:0"
+  log_ckpt: False
+  save_ckpt: False
+  save_logits: False
+  report_time: False
+  checkpoint_dir: !!null
+  nb_epochs: 100
+  patience: 15
+  eval_test: False
+  eval_test_every_n_epochs: 1
+
+model_configs: 
+  max_length: 128
+  quantize_bert: True
+  quantize_embeddings: False
+  #num_bits_act: 8.0
+  num_states: 2
+
+parameters: 
+  bert_lr: 0.00001 #we override learning rate in run_sweep depending on the task
+  batch_size: 32
+  bert_quant_type: "QAT"

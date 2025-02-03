@@ -1,1 +1,7 @@
-bitbertgcn_calcs/efficiency_plots/*
+bittransgnn_calcs/efficiency_plots/*
+visualization/lmbd_plots/*
+visualization/logits/*
+visualization/logits_new/*
+visualization/pca_plots/*
+visualization/tsne_plots/*
+visualization/logits_processed.pkl

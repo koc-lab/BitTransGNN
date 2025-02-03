@@ -1,0 +1,46 @@
+name: bittransgnn-inference
+
+log_configs:
+  comet: False
+  pandas_df: False
+  wandb: False
+  workspace: !!null #you should enter the name of your Comet workspace here
+  api_key: !!null #you should enter the api_key of your Comet account here
+
+load_configs:
+  workspace: !!null #you should enter the name of your Comet workspace here
+  api_key: !!null #you should enter the api_key of your Comet account here
+  experiment_load_name: !!null
+  experiment_load_key: !!null
+  manual_load_ckpt: !!null
+  local_load: True
+
+experiment_configs:
+  seed: 0
+  inference_type: "transductive"
+  dataset_name: "20ng"
+  bert_pre_model: "roberta-base"
+  device: "cuda:1"
+  checkpoint_dir: !!null
+  log_ckpt: False
+  save_ckpt: False
+  save_logits: False
+  report_time: False
+
+model_configs: 
+  max_length: 128
+  quantize_bert: True
+  quantize_embeddings: False
+  quantize_gcn: False
+  num_bits_act: 8.0
+  num_states: 2
+  gcn_num_states: 2
+
+parameters: 
+  gcn_layers: 2
+  batch_size: 32
+  lmbd: 0.55
+  bert_quant_type: "QAT"
+  joint_training: False
+  graph_hidden_size: 256
+  dropout: 0.5
