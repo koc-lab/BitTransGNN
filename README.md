@@ -55,8 +55,8 @@ In this work, we propose a method to improve the performance of transformers qua
    | Method    | Description |
    | -------- | ------- |
    | bittransformer  | Fine-tunes full-precision and quantized transformer models before integrating them into the main architecture.|
-   | bittransgnn | Trains quantized transformers jointly with GNNs in different configurations.|
-   | direct-seperation    | Seperates quantized transformer model from the joint architecture after training for inference.|
+   | bittransgnn | Trains a quantized transformer jointly with a GNN in different configurations.|
+   | direct-seperation    | Seperates the quantized transformer from the joint architecture after training for inference.|
    | knowledge-distillation    | Compresses the knowledge of the joint architecture into a quantized transformer model through knowledge distillation.|
 
    Each of the `bittransformer`, `bittransgnn` and `knowledge-distillation` methods contain `train.py`, `run_sweep.py` and `inference.py` scripts. direct-seperation involves no additional training and only applies inference. For that reason, it only contains the `inference.py` script.
@@ -77,7 +77,7 @@ In this work, we propose a method to improve the performance of transformers qua
 
    The `save_ckpt` variable should be set to `True` in the `configs/train_config.yaml` file if one wants to save model checkpoint for later use in the joint architecture.
 #
-### bittransgnn: Training Quantized Transformers with GNNs
+### BitTransGNN: Training Quantized Transformers with GNNs
    We combine quantized transformers with GNNs during training to improve their performance and enhance their predictions. We use a Graph Convolutional Network (GCN) as the GNN companion. We interpolate the outputs of the quantized transformer and the GNN during training. 
    <!-- Uncomment this part after reviewing stage is completed -->
    <!-- The outputs of the quantized transformer and the GNN are interpolated through the following equation:
@@ -96,6 +96,9 @@ In this work, we propose a method to improve the performance of transformers qua
    Different $\lambda$ values can be searched using the `run_sweep.py` script. 
 
    For use in `direct-seperation` and `knowledge-disillation` methods, the `save_ckpt` variable should be set to `True`.
+   
+   To initialize the node embeddings of the teacher `BitTransGNN` model with the latest state of the `BitTransformer` model when using the `KD` method and when employing the trained `BitTransGNN` method for inference, `save_logits` should be set to `True`. In that case, `ext_cls_feats` are used to initialize the document node embeddings.
+
 #
 ### Direct Seperation (DS)
    After `BitTransGNN` training, `DS` seperates the quantized transformer and its classifier from the GCN after training and uses them for inference, without GCN's assistance during inference time. 
@@ -120,8 +123,23 @@ In this work, we propose a method to improve the performance of transformers qua
    python -m methods.knowledge_distillation.run_sweep
    ```
 
+## Calculations on Memory and Energy Efficiency
+   The exact values of parameter counts and the number of arithmetic operations can be found in the scripts within the `bittransgnn_calcs/` folder. 
+
+   For sample calculations on memory and energy efficiency and to reproduce the efficiency plots displayed in the manuscript, you can look at the `bittransgnn_calcs/bittransgnn_efficiency_notebook.ipynb` notebook.
+
+#
+## Visualization
+   The script `plot_lmbd_vs_acc_static.py` can be used to plot the accuracy of a model in different quantization rates for varying values of $\lambda$. The script is originally written to focus on `Static` `BitTransGNN` variants, but it can be very simply adapted to the `Dynamic` variant as well.
+   ```bash
+   cd visualization
+   python plot_lmbd_vs_acc_static.py
+   ```
+
+   To conduct the other visualization methods, including dimensionality reduction techniques such as UMAP and T-SNE, and PCA analysis applied on the similarity profiles of the final logits of BitTransformer and GNN models, can be found in `visualization.ipynb`.
+
 ## Results
-   Results will be made public upon the completion of the reviewing stage by IEEE TSP. 
+   Results will be made public upon the completion of the reviewing stage.
 
 ## Acknowledgements 
    - The data preprocessing and graph construction scripts are adapted from [TextGCN](https://github.com/yao8839836/text_gcn) and [BertGCN](https://github.com/ZeroRin/BertGCN) repositories.
