@@ -20,34 +20,22 @@ def bert_layernorms(L, dh):
 def bert_clsif(dh, do=20):
     return dh*do+do
 
-def gcn_params(dh, dg, do):
+def gnn_params(dh, dg, do):
     return dh*dg+dg + dg*do+do
 
-"""
-def count_ops(n, m, p):
-    adds = n*m*p
-    mults = n*m*p
-    return adds, mults
-
-def count_quant_ops(n, m, p):
-    adds = n*(2*m-1)*p
-    mults = n*(m+p)
-    return adds, mults
-"""
-
-def gcn_add_ops(num_nodes, num_edges, dh, dg, do):
+def gnn_add_ops(num_nodes, num_edges, dh, dg, do):
     return num_edges*dh + num_nodes*dh*(dg-1) + num_nodes*dg*(do-1) + num_nodes*do
 
-def gcn_mult_ops(num_nodes, num_edges, dh, dg, do):
+def gnn_mult_ops(num_nodes, num_edges, dh, dg, do):
     return num_edges*dh + num_nodes*dh*dg + num_nodes*dg*do
 
-def gcn_full_ops(num_nodes, num_edges, dh, dg, do):
-    #add_op, mult_op = gcn_add_ops(num_nodes, edge_count, dh, dg, do), gcn_mult_ops(num_nodes, edge_count, dh, dg, do)
+def gnn_full_ops(num_nodes, num_edges, dh, dg, do):
+    #add_op, mult_op = gnn_add_ops(num_nodes, edge_count, dh, dg, do), gnn_mult_ops(num_nodes, edge_count, dh, dg, do)
     add_op = 2*num_edges*dh + num_nodes*dh*(dg-1) + num_nodes*dg + num_nodes*dg*(do-1) + num_nodes*do
     mult_op = 2*num_edges*dh + num_nodes*dh*dg + num_nodes*dg*do
     return add_op, mult_op
 
-def gcn_quant_ops(num_nodes, num_edges, dh, dg, do, bin):
+def gnn_quant_ops(num_nodes, num_edges, dh, dg, do, bin):
     if bin:
         add_ops = num_edges*dh + num_nodes*dh*(2*dg-1) + num_nodes*dg*(2*do-1)
     else:
@@ -55,15 +43,15 @@ def gcn_quant_ops(num_nodes, num_edges, dh, dg, do, bin):
     mult_ops = num_edges*dh
     return add_ops, mult_ops
 
-def gcn_ops(num_nodes, num_edges, dh, dg, do, bits, dataset_conf: Optional[dict] = None, train_type="static", batch_size=32):
+def gnn_ops(num_nodes, num_edges, dh, dg, do, bits, dataset_conf: Optional[dict] = None, train_type="static", batch_size=32):
     if bits == 32.0:
-        add, mult = gcn_full_ops(num_nodes, num_edges, dh, dg, do)
+        add, mult = gnn_full_ops(num_nodes, num_edges, dh, dg, do)
     else:
         if bits == 1.00 or bits == 1.58:
             bin = True
         elif bits == 2.00 or bits == 2.32:
             bin = False
-        add, mult = gcn_quant_ops(num_nodes, num_edges, dh, dg, do, bin)
+        add, mult = gnn_quant_ops(num_nodes, num_edges, dh, dg, do, bin)
     if train_type == "dynamic":
         assert (dataset_conf is not None)
         num_sequences = dataset_conf["num_sequences"]
@@ -179,7 +167,7 @@ def bert_ops_info(model_type, model_size, exact=False, inv=False, dataset_conf: 
                     print("add: ", addop/highbit_addop)
                     print("mult: ", multop/highbit_multop)
 
-def bertgcn_ops_info(model_type, model_size, exact=False, inv=False):
+def bittransgnn_ops_info(model_type, model_size, exact=False, inv=False):
     highbit = 32.0
     model_type = "bert"
     bits_list = [32.0, 1.0, 2.0]
