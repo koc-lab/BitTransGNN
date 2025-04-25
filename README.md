@@ -10,7 +10,7 @@ In this work, we propose a method to improve the performance of transformers qua
 
 1. Cloning the repository
    ```bash
-   git clone https://github.com/EralpK/BitTransGNN.git
+   git clone https://github.com/koclab/BitTransGNN.git
 
 2. Installing the required dependencies
 
