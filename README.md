@@ -1,6 +1,6 @@
 # Quantized Transformers with Graph Neural Networks
 
-This repository contains the implementation of "Quantized Transformers with Graph Neural Networks" about to be submitted to IEEE Transactions on Signal and Information Processing over Networks (TSIPN). 
+This repository contains the implementation of "Quantized Transformers with Graph Neural Networks" submitted to IEEE Transactions on Signal and Information Processing over Networks (TSIPN). 
 
 ## Introduction
 
@@ -143,5 +143,5 @@ In this work, we propose a method to improve the performance of transformers qua
 
 ## Acknowledgements 
    - The data preprocessing and graph construction scripts are adapted from [TextGCN](https://github.com/yao8839836/text_gcn) and [BertGCN](https://github.com/ZeroRin/BertGCN) repositories.
-   - We acknowledge the guidance we received from the implementation of [BitNet](https://github.com/microsoft/BitNet) during the construction of our quantization module.
+   - The implementation of [BitNet](https://github.com/microsoft/BitNet) has been a useful guide for us in our construction of the quantization module.
 
