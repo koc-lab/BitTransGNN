@@ -28,7 +28,8 @@ def tot_energy(addop, multop, dtype, processor):
 def bittransformer_energy_info(model_type, model_size, exact=True, inv=False, dataset_conf: Optional[dict] = None, full_batch=False):
     highbit = 32.0
     bit_list = [32.0, 1.0, 2.0]
-    processor_list = ["7nm", "45nm"]
+    #processor_list = ["7nm", "45nm"]
+    processor_list = ["7nm"]
     for processor in processor_list:
         for bits in bit_list:
             if bits == 32.0:
@@ -69,7 +70,7 @@ def bittransformer_energy_info(model_type, model_size, exact=True, inv=False, da
 def bittransgnn_energy_info(model_type, model_size, gnn_conf: dict, exact=True, inv=False, dataset_conf: Optional[dict] = None, full_batch=True, batch_size=32, train_type="static", gnn_bits=32):
     highbit = 32.0
     bit_list = [32.0, 1.0, 2.0]
-    processor_list = ["7nm", "45nm"]
+    processor_list = ["7nm"]
     for processor in processor_list:
         for bits in bit_list:
             if bits == 32.0:

@@ -59,13 +59,15 @@ def gnn_ops(num_nodes, num_edges, dh, dg, do, bits, dataset_conf: Optional[dict]
     return add, mult
 
 def bert_add_ops(dh, M, L, H, do):
-    ds = dh/12
+    ds = dh/H
     df = dh*4
     emb = 2*M*dh
-    attn = M*L*H*3*dh*ds+M*dh*dh + 2*L*H*(M-1)*M*ds
-    ffn = M*dh*df+M*df*dh
-    pool = M*dh*dh
-    clsif = M*dh*do
+    attn = L*(M*H*3*dh*ds + M*dh*dh + 2*H*(M-1)*M*ds + 2*M*dh)
+    ffn = L*(M*dh*df+M*df*dh + 2*M*dh)
+    #pool = M*dh*dh
+    #clsif = M*dh*do
+    pool = dh*dh
+    clsif = dh*do
     total = emb + attn + ffn + pool + clsif
     return total
 
@@ -74,35 +76,41 @@ def bert_quant_add_ops(dh, M, L, H, do, bin=True):
         add_factor = 2
     else:
         add_factor = 3
-    ds = dh/12
+    ds = dh/H
     df = dh*4
     emb = 2*M*dh
-    attn = M*L*H*3*(add_factor*dh-1)*ds + M*(add_factor*dh-1)*dh + 2*L*H*(M-1)*M*ds
-    ffn = M*(add_factor*dh-1)*df + M*(add_factor*df-1)*dh
-    pool = M*(add_factor*dh-1)*dh
-    clsif = M*(add_factor*dh-1)*do
+    attn = L*(M*H*3*(add_factor*dh-1)*ds + M*(add_factor*dh-1)*dh + 2*H*(M-1)*M*ds + 2*M*dh)
+    ffn = L*(M*(add_factor*dh-1)*df + M*(add_factor*df-1)*dh + 2*M*dh)
+    #pool = M*(add_factor*dh-1)*dh
+    #clsif = M*(add_factor*dh-1)*do
+    pool = (add_factor*dh-1)*dh
+    clsif = (add_factor*dh-1)*do
     total = emb + attn + ffn + pool + clsif
     return total
 
 def bert_mult_ops(dh, M, L, H, do):
-    ds = dh/12
+    ds = dh/H
     df = dh*4
     emb = 2*M*dh
-    attn = M*L*H*3*dh*ds+M*dh*dh + 2*L*H*M*M*ds
-    ffn = M*dh*df + M*df*dh
-    pool = M*dh*dh
-    clsif = M*dh*do
+    attn = L*(M*H*3*dh*ds + M*dh*dh + 2*H*M*M*ds + 2*M*dh)
+    ffn = L*(M*dh*df + M*df*dh + 2*M*dh)
+    #pool = M*dh*dh
+    #clsif = M*dh*do
+    pool = dh*dh
+    clsif = dh*do
     total = emb + attn + ffn + pool + clsif
     return total
 
-def bert_quant_mult_ops(dh, M, L, H, do):
-    ds = dh/12
+def bert_quant_mult_ops(dh, M, L, H, do): #final version (dequantizes the output through a single step)
+    ds = dh/H
     df = dh*4
     emb = 2*M*dh
-    attn = M*L*H*3*(dh+ds)+M*(dh+dh) + 2*L*H*M*M*ds
-    ffn = M*(dh+df) + M*(df+dh)
-    pool = M*(dh+dh)
-    clsif = M*(dh+do)
+    attn = L*(H*3*M*ds + M*dh + 2*H*M*M*ds + 2*M*dh)
+    ffn = L * (M*df + M*dh + 2*M*dh)
+    #pool = dh*(M+dh)
+    #clsif = dh*(M+do)
+    pool = dh
+    clsif = do
     total = emb + attn + ffn + pool + clsif
     return total
 
