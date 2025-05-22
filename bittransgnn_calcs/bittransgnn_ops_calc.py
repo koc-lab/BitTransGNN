@@ -23,23 +23,17 @@ def bert_clsif(dh, do=20):
 def gnn_params(dh, dg, do):
     return dh*dg+dg + dg*do+do
 
-def gnn_add_ops(num_nodes, num_edges, dh, dg, do):
-    return num_edges*dh + num_nodes*dh*(dg-1) + num_nodes*dg*(do-1) + num_nodes*do
-
-def gnn_mult_ops(num_nodes, num_edges, dh, dg, do):
-    return num_edges*dh + num_nodes*dh*dg + num_nodes*dg*do
-
 def gnn_full_ops(num_nodes, num_edges, dh, dg, do):
     #add_op, mult_op = gnn_add_ops(num_nodes, edge_count, dh, dg, do), gnn_mult_ops(num_nodes, edge_count, dh, dg, do)
-    add_op = 2*num_edges*dh + num_nodes*dh*(dg-1) + num_nodes*dg + num_nodes*dg*(do-1) + num_nodes*do
+    add_op = 2*num_edges*(dh-1) + num_nodes*dh*(dg-1) + num_nodes*dg + num_nodes*dg*(do-1) + num_nodes*do
     mult_op = 2*num_edges*dh + num_nodes*dh*dg + num_nodes*dg*do
     return add_op, mult_op
 
 def gnn_quant_ops(num_nodes, num_edges, dh, dg, do, bin):
     if bin:
-        add_ops = num_edges*dh + num_nodes*dh*(2*dg-1) + num_nodes*dg*(2*do-1)
+        add_ops = 2*num_edges*(dh-1) + num_nodes*dh*(2*dg-1) + num_nodes*dg*(2*do-1)
     else:
-        add_ops = num_edges*dh + num_nodes*dh*(3*dg-1) + num_nodes*dg*(3*do-1)
+        add_ops = 2*num_edges*(dh-1) + num_nodes*dh*(3*dg-1) + num_nodes*dg*(3*do-1)
     mult_ops = num_edges*dh
     return add_ops, mult_ops
 
