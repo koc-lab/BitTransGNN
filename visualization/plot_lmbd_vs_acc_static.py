@@ -1,7 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
-base_dir = '/Users/eralpkumbasar/Documents/Master Research/1-bit LLM/Kod/all_codes/BertGCN/'
+base_dir = '/results/'
 dataset_name_list = ["mr", "ohsumed", "cola", "stsb", "rte", "mrpc"]
 
 def read_avg_results(base_dir, dataset):
@@ -28,7 +28,6 @@ def read_avg_results(base_dir, dataset):
     filtered_df_bitbertgcn = filtered_df_bitbertgcn[bitbertgcn_config_keys + desired_metrics]
 
     bitbert_config_keys = ["dataset_name", "model_configs|num_states"]
-    # Filter rows where dataset_name is "mr" or "ohsumed", bert_quant_type is "QAT", and train_type is "static"
     filtered_df_bitbert = df_bitbert[(df_bitbert['dataset_name'] == dataset) & 
                                         (df_bitbert['model_configs|quantize_embeddings'] == False) & 
                                         (df_bitbert['model_configs|num_bits_act'] == 8.0) &
@@ -68,8 +67,6 @@ def plot_results(base_dir, dataset):
     num_states_list = [2.0, 3.0, 5.0]
     label_list = ["1-bit", "1.58-bit", "2.32-bit"]
     lmbd_list = filtered_df["lmbd"].unique()
-    #acc_list = np.zeros((len(lmbd_list), len(num_states_list)))
-    #std_list = np.zeros((len(lmbd_list), len(num_states_list)))
     acc_list, std_list = [], []
     for num_states in num_states_list:
         acc_list.append(filtered_df[filtered_df["num_states"] == num_states]["test_avg"].values)
@@ -94,15 +91,15 @@ def plot_results(base_dir, dataset):
     plt.grid(True)
 
     plt.legend(label_list)
-    plt.xticks(ticks=lmbd_list, labels=lmbd_list, fontweight="bold")
-    plt.yticks(fontweight="bold")
-    plt.xlabel(r'$\mathbf{\lambda}$',fontsize=15,labelpad=5,fontweight="bold")
+    plt.xticks(fontsize="18", fontweight="bold")
+    plt.yticks(fontsize="18", fontweight="bold")
+    plt.xlabel(r'$\mathbf{\lambda}$', fontdict={"weight": "bold", "size": 18}, labelpad=10)
     #plt.title(dataset.upper(),fontweight="bold")
     plt.legend(prop={'weight': 'bold'})
-    plt.ylabel(r'Test Accuracy ($\%$)',fontsize=15,labelpad=5, fontweight="bold")
+    plt.ylabel(r'Test Accuracy ($\%$)', fontdict={"weight": "bold", "size": 18}, labelpad=10)
     plt.tight_layout()
-    plt.savefig(f"./lmbd_plot/{dataset}_lmbd_vs_acc.png")
+    #plt.savefig(f"./lmbd_plots/{dataset}_lmbd_vs_acc.png")
+    plt.savefig(f"./lmbd_plots/{dataset}_lmbd_vs_acc.pdf")
 
 for dataset in dataset_name_list:
-#for dataset in ["mr"]:
     plot_results(base_dir, dataset)
