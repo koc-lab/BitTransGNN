@@ -206,7 +206,6 @@ def quantize_bittransgnn_architecture(
     quantize_gcn: bool,
     num_states: int,
     joint_training: bool,
-    interp_outs: bool,
     lmbd: float,
     quantize_embeddings: bool,
     num_bits_act: float,
@@ -292,17 +291,11 @@ def quantize_bittransgnn_architecture(
         print("model: ", model)
 
     if joint_training:
-        if interp_outs:
-            print(f"BERT and GCN jointly trained; outputs interpolated by λ={lmbd}.")
-            print("BERT cls logits are interpolated with GCN output for final prediction.")
-        else:
-            print("GCN output is used for prediction; BERT provides trainable features (no interpolation).")
+        print(f"BERT and GCN jointly trained; outputs interpolated by λ={lmbd}.")
+        print("BERT cls logits are interpolated with GCN output for final prediction.")
     else:
-        if interp_outs:
-            print("GCN is trained; BERT provides features for GCN.")
-            print(f"BERT cls logits are interpolated with GCN output by λ={lmbd} for final prediction.")
-        else:
-            print("GCN output determines predictions; BERT only provides features (no interpolation).")
+        print("GCN is trained; BERT provides features for GCN.")
+        print(f"BERT cls logits are interpolated with GCN output by λ={lmbd} for final prediction.")
     return model
 
 
