@@ -1,0 +1,72 @@
+configs: 
+#### cola ####
+  - sweep_agent: comet
+    algorithm: grid
+    spec: 
+      metric: best_val_acc
+      objective: maximize
+    #for wandb, use the following instead of algorithm and spec:
+    #method: grid
+    #metric:
+    # name: best_val_acc
+    # goal: maximize
+
+    log_configs:
+      comet: True
+      pandas_df: False
+      wandb: False
+      project_name: baseline-os-bittransgnn-kd
+      workspace: !!null #you should enter the name of your Comet workspace here
+      api_key: !!null #you should enter the api_key of your Comet account here
+
+    load_configs:
+      workspace: !!null #you should enter the name of your Comet workspace here
+      api_key: !!null #you should enter the api_key of your Comet account here
+      experiment_load_name: !!null
+      experiment_load_key: !!null
+      manual_load_ckpt: "/auto/k2/aykut4/kumbasar/1_bit_llm/baselines/quant_ckpts/"
+      local_load: True
+
+    experiment_configs:
+      seed: [0,1,2,3,4]
+      inference_type: "transductive"
+      dataset_name: "cola"
+      bert_pre_model: "bert-base-uncased"
+      baseline_type: "os"
+      device: "cuda:1"
+      distillation_type: "offline"
+      experiment_load_name: !!null
+      experiment_load_key: !!null
+      manual_load_ckpt: !!null
+      log_ckpt: False
+      save_ckpt: False
+      save_logits: False
+      report_time: False
+      checkpoint_dir: "/auto/k2/aykut4/kumbasar/1_bit_llm/bittransgnnv2/bittransgnn/model_checkpoints_baselines/"
+      nb_epochs: 100
+      patience: 15
+      eval_test: False
+      eval_test_every_n_epochs: 1
+
+    model_configs: 
+      max_length: 128
+      quant_bit: 8
+      quantize_gcn: False
+      gcn_num_states: 2
+      adj_type: "full"
+
+    #generally, we list the parameters that are suitable for parameter sweeping under parameters
+    #note that in offline distillation, teacher model parameters (e.g. lmbd) are not suitable for sweeping
+    parameters: 
+      gcn_layers: 2
+      bert_lr: 0.00001
+      student_lr: 0.00001
+      #temperature: 1.0
+      temperature: 1.0
+      alpha_d: 0.5
+      gcn_lr: 0.001
+      batch_size: 32
+      teacher_lmbd: -1
+      joint_training: True
+      graph_hidden_size: 256
+      dropout: 0.5
