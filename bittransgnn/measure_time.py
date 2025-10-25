@@ -14,7 +14,7 @@ from inference_engines import BitTransGNNInference, BitTransformerInference
 
 
 # ------------ Config you can tweak ------------
-WORKSPACE = "bittransgnn-v2"
+WORKSPACE = None
 PROJECT   = "bittransgnn-runtime"
 API_KEY   = os.getenv("COMET_API_KEY", None)  # set this in your env
 DEVICE    = "cuda:0" if torch.cuda.is_available() else "cpu"
@@ -41,7 +41,6 @@ lmbd                 = 0.5
 gcn_layers           = 2
 n_hidden             = 256
 dropout              = 0.5
-interp_outs          = True
 train_only           = False
 
 # Timing protocol
@@ -71,7 +70,7 @@ for dataset_name in DATASETS:
         text_data = TextDataObject(dataset_name, batch_size, adj_type=adj_type, seed=SEED)
         nb_class = text_data.nb_class
 
-        bittransgnn_model = BitTransGNN(pretrained_model=bert_pre_model, joint_training=joint_training, interp_outs=interp_outs, 
+        bittransgnn_model = BitTransGNN(pretrained_model=bert_pre_model, joint_training=joint_training,
                                         quantize_gcn=quantize_gcn, gcn_num_states=gcn_num_states,
                                         nb_class=nb_class, lmbd=lmbd, gcn_layers=gcn_layers, n_hidden=n_hidden, dropout=dropout,
                                         regression=regression)
@@ -105,7 +104,6 @@ for dataset_name in DATASETS:
             model=bittransgnn_model,
             dataset_name=dataset_name,
             graph_data=graph_data,
-            interp_outs=interp_outs,
             joint_training=False,
             device=DEVICE,
             ext_cls_feats=None,          # None to force timing BERT extraction
@@ -118,7 +116,6 @@ for dataset_name in DATASETS:
             model=bittransgnn_model,
             dataset_name=dataset_name,
             graph_data=graph_data,
-            interp_outs=interp_outs,
             joint_training=True,
             device=DEVICE,
             ext_cls_feats=None,          # None to force timing BERT extraction
@@ -183,7 +180,6 @@ for dataset_name in DATASETS:
             "gcn_layers": gcn_layers,
             "n_hidden": n_hidden,
             "dropout": dropout,
-            "interp_outs": interp_outs,
             "regression": regression,
             "timing_warmup_stageA": WARMUP_A,
             "timing_repeat_stageA": REPEAT_A,

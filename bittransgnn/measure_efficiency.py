@@ -633,7 +633,7 @@ def build_bertgcn_from_config(cfg: Dict[str, Any], use_bitlinear=False):
     lmbd = params["lmbd"]
 
     model = BitTransGNN(
-        pretrained_model=bert_pre_model, joint_training=params["joint_training"], interp_outs=params["interp_outs"],
+        pretrained_model=bert_pre_model, joint_training=params["joint_training"], 
         quantize_gcn=mod["quantize_gcn"], gcn_num_states=mod["gcn_num_states"],
         nb_class=nb_class, lmbd=lmbd, gcn_layers=params["gcn_layers"], n_hidden=params["graph_hidden_size"],
         dropout=params["dropout"], regression=regression
