@@ -12,20 +12,20 @@ def read_avg_results(base_dir, dataset):
     elif dataset == "cola":
         desired_metrics = ["best_test_matthews_corr", "best_test_matthews_corr.1"]
     # Load the CSV file
-    bitbertgcn_file_path = base_dir + 'bitbertgcn_stats_seed.csv'
-    df_bitbertgcn = pd.read_csv(bitbertgcn_file_path)
+    bittransgnn_file_path = base_dir + 'bittransgnn_stats_seed.csv'
+    df_bittransgnn = pd.read_csv(bittransgnn_file_path)
 
     bitbert_file_path = base_dir + 'bitbert_stats_seed.csv'
     df_bitbert = pd.read_csv(bitbert_file_path)
 
-    bitbertgcn_config_keys = ["dataset_name", "num_states", "lmbd"]
-    filtered_df_bitbertgcn = df_bitbertgcn[(df_bitbertgcn['dataset_name'] == dataset) & 
-                                            (df_bitbertgcn['bert_quant_type'] == 'QAT') & 
-                                            (df_bitbertgcn['bert_pre_model'] == 'bert-base-uncased') &
-                                            (df_bitbertgcn["lmbd"].isin([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])) &
-                                            (df_bitbertgcn['train_type'] == 'static')]
+    bittransgnn_config_keys = ["dataset_name", "num_states", "lmbd"]
+    filtered_df_bittransgnn = df_bittransgnn[(df_bittransgnn['dataset_name'] == dataset) & 
+                                            (df_bittransgnn['bert_quant_type'] == 'QAT') & 
+                                            (df_bittransgnn['bert_pre_model'] == 'bert-base-uncased') &
+                                            (df_bittransgnn["lmbd"].isin([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])) &
+                                            (df_bittransgnn['train_type'] == 'static')]
 
-    filtered_df_bitbertgcn = filtered_df_bitbertgcn[bitbertgcn_config_keys + desired_metrics]
+    filtered_df_bittransgnn = filtered_df_bittransgnn[bittransgnn_config_keys + desired_metrics]
 
     bitbert_config_keys = ["dataset_name", "model_configs|num_states"]
     filtered_df_bitbert = df_bitbert[(df_bitbert['dataset_name'] == dataset) & 
@@ -43,23 +43,23 @@ def read_avg_results(base_dir, dataset):
         bitbert_lmbds += [0.0]
 
     filtered_df_bitbert["lmbd"] = bitbert_lmbds
-    filtered_df_bitbert = filtered_df_bitbert[bitbertgcn_config_keys + desired_metrics]
+    filtered_df_bitbert = filtered_df_bitbert[bittransgnn_config_keys + desired_metrics]
     if dataset in ["mr", "ohsumed"]:
-        filtered_df_bitbertgcn = pd.concat([filtered_df_bitbertgcn, filtered_df_bitbert])
+        filtered_df_bittransgnn = pd.concat([filtered_df_bittransgnn, filtered_df_bitbert])
     desired_metrics = ["test_avg", "test_std"]
     if dataset in ["mr", "ohsumed", "rte", "mrpc"]:
-        filtered_df_bitbertgcn.rename(columns={"best_test_accuracy": "test_avg", 
+        filtered_df_bittransgnn.rename(columns={"best_test_accuracy": "test_avg", 
                                             "best_test_accuracy.1": "test_std"}, inplace=True)
     elif dataset == "stsb":
-        filtered_df_bitbertgcn.rename(columns={"best_test_pearson_corr": "test_avg", 
+        filtered_df_bittransgnn.rename(columns={"best_test_pearson_corr": "test_avg", 
                                             "best_test_pearson_corr.1": "test_std"}, inplace=True)
     elif dataset == "cola":
-        filtered_df_bitbertgcn.rename(columns={"best_test_matthews_corr": "test_avg", 
+        filtered_df_bittransgnn.rename(columns={"best_test_matthews_corr": "test_avg", 
                                             "best_test_matthews_corr.1": "test_std"}, inplace=True)
-    filtered_df_bitbertgcn = filtered_df_bitbertgcn.sort_values(by=["dataset_name", "num_states", "lmbd"]).reset_index(drop=True)[bitbertgcn_config_keys + desired_metrics]
+    filtered_df_bittransgnn = filtered_df_bittransgnn.sort_values(by=["dataset_name", "num_states", "lmbd"]).reset_index(drop=True)[bittransgnn_config_keys + desired_metrics]
     for metric in ["num_states", "lmbd", "test_avg", "test_std"]:
-        filtered_df_bitbertgcn[metric] = pd.to_numeric(filtered_df_bitbertgcn[metric], errors='coerce')
-    return(filtered_df_bitbertgcn)
+        filtered_df_bittransgnn[metric] = pd.to_numeric(filtered_df_bittransgnn[metric], errors='coerce')
+    return(filtered_df_bittransgnn)
 
 def plot_results(base_dir, dataset):
     print(f"dataset: {dataset}")
