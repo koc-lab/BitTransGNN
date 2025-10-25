@@ -45,10 +45,7 @@ In this work, we propose a method to improve the performance of transformers qua
    ```bash
    python build_graph.py
    ```
-   The text graphs constructed through `build_graph.py` contain all train, test, and validation nodes. In case one wants to operate methods only over the training nodes, the following command should be executed:
-   ```bash
-   python build_graph_inductive.py
-   ```
+   The text graphs constructed through `build_graph.py` contain all train, test, and validation nodes. 
 
 ## Methods
    Our work is a composition of four methods. The four methods are contained within the `/methods` directory. We list the methods in the table below:
@@ -123,10 +120,17 @@ In this work, we propose a method to improve the performance of transformers qua
    python -m methods.knowledge_distillation.run_sweep
    ```
 
-## Calculations on Memory and Energy Efficiency
+#
+## Memory and Energy Efficiency
    The exact values of parameter counts and the number of arithmetic operations can be found in the scripts within the `bittransgnn_calcs/` folder. 
 
-   For sample calculations on memory and energy efficiency and to reproduce the efficiency plots displayed in the manuscript, you can look at the `bittransgnn_calcs/bittransgnn_efficiency_notebook.ipynb` notebook.
+   For sample calculations on memory and energy efficiency and to reproduce the efficiency plots displayed in the manuscript, the notebook `bittransgnn_calcs/bittransgnn_efficiency_notebook.ipynb` can be used.
+
+   To compare the energy consumption and the inference time of quantized and full-precision transformer and BitTransGNN variants, `measure_efficiency.py` can be used. 
+
+#
+## Integration of PTQ Baselines into BitTransGNN
+   To show that the proposed method produces complementary gains to what can be achieved through quantization and can be used in conjunction with existing baselines, we integrated PTQ baselines into BitTransGNN to further improve their performance. Specifically, we incorporated the transformers outputted by Outlier Suppression (OS) and OS+ methods into BitTransGNN. `quant_transformer_os/` contains the implementation of these methods, closely following the steps introduced in the OS and OS+ repositories. Likewise, `methods_os/` contains the training scripts to incorpotate these models within our proposed architecture.
 
 #
 ## Visualization
@@ -142,6 +146,5 @@ In this work, we propose a method to improve the performance of transformers qua
    Results will be made public upon the completion of the reviewing stage.
 
 ## Acknowledgements 
-   - The data preprocessing and graph construction scripts are adapted from [TextGCN](https://github.com/yao8839836/text_gcn) and [BertGCN](https://github.com/ZeroRin/BertGCN) repositories.
-   - The implementation of [BitNet](https://github.com/microsoft/BitNet) has been a useful guide for us in our construction of the quantization module.
-
+   - The data preprocessing is adapted from the [TextGCN](https://github.com/yao8839836/text_gcn) repository.
+   - The `quant_transformer_os/` folder is constructed based on the [OS](https://github.com/wimh966/outlier_suppression) repository. The [OS+](https://github.com/ModelTC/Outlier_Suppression_Plus) method is added as an alternative to OS within the same script.
