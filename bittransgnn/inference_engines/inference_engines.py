@@ -120,11 +120,10 @@ class BitTransformerInference:
 
     
 class BitTransGNNInference:
-    def __init__(self, model, dataset_name, graph_data: GraphDataObject, interp_outs, joint_training, device, ext_cls_feats, batch_size, inductive=False, recompute_bert=False):
+    def __init__(self, model, dataset_name, graph_data: GraphDataObject, joint_training, device, ext_cls_feats, batch_size, inductive=False, recompute_bert=False):
         self.model = model
         self.dataset_name = dataset_name
         self.graph_data = graph_data
-        self.interp_outs = interp_outs
         self.joint_training = joint_training
         self.device = device
         self.ext_cls_feats = ext_cls_feats

@@ -204,7 +204,7 @@ class BitTransGNNTrainer:
     def __init__(self, model, dataset_name, 
                  optimizer, scheduler, 
                  graph_data: GraphDataObject, 
-                 interp_outs, joint_training, device, batch_size,
+                 joint_training, device, batch_size,
                  inductive=False,
                  eval_test=True, eval_test_every_n_epochs: int = 1):
         self.model = model
@@ -212,7 +212,6 @@ class BitTransGNNTrainer:
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.graph_data = graph_data
-        self.interp_outs = interp_outs
         self.joint_training = joint_training
         self.device = device
         self.batch_size = batch_size
