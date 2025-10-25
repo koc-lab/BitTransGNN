@@ -1,3 +1,5 @@
+import random
+
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
@@ -8,7 +10,21 @@ import scipy.sparse as sp
 
 from ..preprocessing.data_preprocessing import normalize_adj, parse_index_file, sample_mask
 
-def load_corpus(dataset_name):
+SEP_WORD = "<<SEP>>"
+PAIR_DATASETS = ["mrpc", "rte", "stsb"]
+BASE = "dataset"
+BASE_PAIR = "dataset_paired"
+
+def split_ab(line: str, sep: str = SEP_WORD):
+    line = line.strip()
+    if not line:
+        return "", None
+    if sep in line:
+        a, b = line.split(sep, 1)
+        return a.strip(), b.strip()
+    return line, None  # single-sentence datasets
+
+def load_corpus(dataset_name, adj_type="full"):
     """
     Loads input corpus from ./dataset directory based on dataset_name.
 
@@ -25,25 +41,43 @@ def load_corpus(dataset_name):
     All objects above must be saved using python pickle module.
 
     :param dataset_name: Dataset name
+    :param adj_type: None (full), no-doc (ww+wd), no-ww(dd+wd), doc-doc (only dd)
     :return: All data input files loaded (as well the training/test data).
     """
-    names = ['x', 'y', 'tx', 'ty', 'allx', 'ally', 'adj']
+    if dataset_name in PAIR_DATASETS:
+        base_path = BASE_PAIR
+    else:
+        base_path = BASE
+    adj_name = "adj"
+    if adj_type != "full":
+        adj_name += f"_{adj_type}"
+    names = ['x', 'y', 'tx', 'ty', 'allx', 'ally', adj_name]
     objects = []
+
     for i in range(len(names)):
-        with open("dataset/ind.{}.{}".format(dataset_name, names[i]), 'rb') as f:
+        with open(f"{base_path}/ind.{dataset_name}.{names[i]}", 'rb') as f:
             objects.append(pkl.load(f))
 
     x, y, tx, ty, allx, ally, adj = tuple(objects)
     print(x.shape, y.shape, tx.shape, ty.shape, allx.shape, ally.shape)
-
-    features = sp.vstack((allx, tx)).tolil()
-    labels = np.vstack((ally, ty))
-    print(len(labels))
+    print(adj.shape)
 
     train_idx_orig = parse_index_file(
-        "dataset/{}.train.index".format(dataset_name))
+        f"{base_path}/{dataset_name}.train.index")
     train_size = len(train_idx_orig)
     print("train_size: ", train_size)
+
+    if adj_type != "doc_doc":
+        features = sp.vstack((allx, tx)).tolil()
+        labels = np.vstack((ally, ty))
+    else:
+        # Combine all document features and labels (exclude word nodes)
+        features = sp.vstack((allx[:train_size], tx)).tolil()  # Only include document nodes
+        labels = np.vstack((ally[:train_size], ty))  # Only include document labels
+        print("Document-only features shape:", features.shape)
+        print("Document-only labels shape:", labels.shape)
+
+    print(len(labels))
 
     val_size = train_size - x.shape[0]
     test_size = tx.shape[0]
@@ -52,7 +86,10 @@ def load_corpus(dataset_name):
 
     idx_train = range(len(y))
     idx_val = range(len(y), len(y) + val_size)
-    idx_test = range(allx.shape[0], allx.shape[0] + test_size)
+    if adj_type != "doc_doc":
+        idx_test = range(allx.shape[0], allx.shape[0] + test_size)
+    else:
+        idx_test = range(len(y)+val_size, len(y) + val_size + test_size)
 
     train_mask = sample_mask(idx_train, labels.shape[0])
     val_mask = sample_mask(idx_val, labels.shape[0])
@@ -69,7 +106,7 @@ def load_corpus(dataset_name):
 
     return adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask, train_size, test_size
 
-def load_train_corpus(dataset_name):
+def load_train_corpus(dataset_name, adj_type="full"):
     """
     Loads input corpus from ./dataset directory based on dataset_name. Loads the training set only for inductive learning setting.
 
@@ -84,13 +121,20 @@ def load_train_corpus(dataset_name):
     All objects above must be saved using python pickle module.
 
     :param dataset_name: Dataset name
+    :param adj_type: None (full), no-doc (ww+wd), no-ww(dd+wd), doc-doc (only dd)
     :return: All data input files loaded.
     """
-
-    names = ['x', 'y', 'allx', 'ally', 'adj']
+    if dataset_name in PAIR_DATASETS:
+        base_path = BASE_PAIR
+    else:
+        base_path = BASE
+    adj_name = "adj"
+    if adj_type != "full":
+        adj_name += f"_{adj_type}"
+    names = ['x', 'y', 'allx', 'ally', adj_name]
     objects = []
     for i in range(len(names)):
-        with open("dataset/ind.{}_inductive.{}".format(dataset_name, names[i]), 'rb') as f:
+        with open(f"{base_path}/ind.{dataset_name}_inductive.{names[i]}", 'rb') as f:
             objects.append(pkl.load(f))
 
     x, y, allx, ally, adj = tuple(objects)
@@ -101,7 +145,7 @@ def load_train_corpus(dataset_name):
     print(len(labels))
 
     train_idx_orig = parse_index_file(
-        "dataset/{}_inductive.train.index".format(dataset_name))
+        f"{base_path}/ind.{dataset_name}_inductive.train.index")
     train_size = len(train_idx_orig)
     print("train_size: ", train_size)
 
@@ -124,9 +168,10 @@ def load_train_corpus(dataset_name):
     return adj, features, y_train, y_val, train_mask, val_mask, train_size
 
 class TextDataObject:
-    def __init__(self, dataset_name, batch_size, seed=None):
+    def __init__(self, dataset_name, batch_size, adj_type="full", seed=None):
         self.dataset_name = dataset_name
         self.batch_size = batch_size
+        self.adj_type = adj_type
         self.seed = seed
         self.nb_class, self.nb_train, self.nb_val, self.nb_test, self.label = self.load_labels()
 
@@ -134,7 +179,7 @@ class TextDataObject:
         """
         Returns the dataloaders for BERT-based models
         """
-        adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask, train_size, test_size = load_corpus(self.dataset_name)
+        adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask, train_size, test_size = load_corpus(self.dataset_name, self.adj_type)
         # compute number of real train/val/test/word nodes and number of classes
         nb_node = adj.shape[0]
         nb_train, nb_val, nb_test = train_mask.sum(), val_mask.sum(), test_mask.sum()
@@ -158,31 +203,80 @@ class TextDataObject:
         label = self.label
         dataset_name = self.dataset_name
         # load documents and compute input encodings
-        corpus_file = './dataset/corpus/'+dataset_name+'_shuffle.txt'
+        if dataset_name in PAIR_DATASETS:
+            base_path = BASE_PAIR
+        else:
+            base_path = BASE
+        print("base_path: ", base_path)
+        corpus_file = f'{base_path}/corpus/{dataset_name}_shuffle.txt'
         with open(corpus_file, 'r') as f:
-            text = f.read()
-            text=text.replace('\\', '')
-            text = text.split('\n')
+            text = f.read().replace('\\', '').split('\n')
 
-        input = model.tokenizer(text, max_length=max_length, truncation=True, padding='max_length', return_tensors='pt')
-        input_ids, attention_mask = {}, {}
+        # 2) Split into (A,B) per line using <<SEP>>
+        a_list, b_list = [], []
+        for line in text:
+            a, b = split_ab(line)   # b is None for single-sentence datasets
+            a_list.append(a)
+            b_list.append(b)
+
+        if self.dataset_name in PAIR_DATASETS:
+            # 3) Tokenize in pair mode (tokenizers handle None in b_list)
+            enc = model.tokenizer(
+                a_list,
+                b_list,
+                max_length=max_length,
+                truncation=True,
+                padding='max_length',
+                return_tensors='pt',
+                return_token_type_ids=True  # BERT uses these; RoBERTa will return zeros
+            )
+        else:
+            enc = model.tokenizer(
+                text,
+                max_length=max_length,
+                truncation=True,
+                padding='max_length',
+                return_tensors='pt',
+                return_token_type_ids=True  # BERT uses these; RoBERTa will return zeros
+            )
+
+        input_ids_all = enc["input_ids"]
+        attn_all      = enc["attention_mask"]
+        tti_all       = enc.get("token_type_ids", None)
 
         # create train/test/val datasets and dataloaders
-        input_ids['train'], input_ids['val'], input_ids['test'] =  input.input_ids[:nb_train], input.input_ids[nb_train:nb_train+nb_val], input.input_ids[-nb_test:]
-        attention_mask['train'], attention_mask['val'], attention_mask['test'] =  input.attention_mask[:nb_train], input.attention_mask[nb_train:nb_train+nb_val], input.attention_mask[-nb_test:]
+        input_ids, attention_mask = {}, {}
+        input_ids['train']       = input_ids_all[:nb_train]
+        input_ids['val']         = input_ids_all[nb_train:nb_train+nb_val]
+        input_ids['test']        = input_ids_all[-nb_test:] if nb_test > 0 else input_ids_all[:0]
+
+        attention_mask['train']  = attn_all[:nb_train]
+        attention_mask['val']    = attn_all[nb_train:nb_train+nb_val]
+        attention_mask['test']   = attn_all[-nb_test:] if nb_test > 0 else attn_all[:0]
+
+        # 4) keep dataset signature the same; stash token_type_ids on self
+        if tti_all is not None:
+            token_type_ids = {
+                'train': tti_all[:nb_train],
+                'val':   tti_all[nb_train:nb_train+nb_val],
+                'test':  tti_all[-nb_test:] if nb_test > 0 else tti_all[:0],
+            }
+        else:
+            token_type_ids = None
 
         datasets = {}
         loaders = {}
 
         for split in ['train', 'val', 'test']:
-            datasets[split] = TensorDataset(input_ids[split], attention_mask[split], label[split])
+            datasets[split] = TensorDataset(input_ids[split], attention_mask[split], token_type_ids[split], label[split])
             loaders[split] = DataLoader(datasets[split], batch_size=batch_size, shuffle=True, worker_init_fn=self.seed)
         self.loaders = loaders
 
 class GraphDataObject:
-    def __init__(self, dataset_name, batch_size, seed=None, train_only=False):
+    def __init__(self, dataset_name, batch_size, adj_type="full", seed=None, train_only=False):
         self.dataset_name = dataset_name
         self.batch_size = batch_size
+        self.adj_type = adj_type
         self.train_only = train_only
         self.seed = seed
         if train_only:
@@ -201,7 +295,7 @@ class GraphDataObject:
         """
         dataset_name, batch_size = self.dataset_name, self.batch_size
         # Data Preprocess
-        adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask, train_size, test_size = load_corpus(self.dataset_name)
+        adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask, train_size, test_size = load_corpus(self.dataset_name, self.adj_type)
         '''
         adj: n*n sparse adjacency matrix
         y_train, y_val, y_test: n*c matrices 
@@ -209,18 +303,17 @@ class GraphDataObject:
         '''
 
         # compute number of real train/val/test/word nodes and number of classes
-        nb_node = features.shape[0]
+        #nb_node = features.shape[0]
+        nb_node = adj.shape[0]
         nb_train, nb_val, nb_test = train_mask.sum(), val_mask.sum(), test_mask.sum()
         nb_word = nb_node - nb_train - nb_val - nb_test
         nb_class = y_train.shape[1]
 
-        # load documents and compute input encodings
-        corpus_file = './dataset/corpus/' + dataset_name +'_shuffle.txt'
-        with open(corpus_file, 'r') as f:
-            text = f.read()
-            text = text.replace('\\', '')
-            text = text.split('\n')
-        
+        print("nb_node: ", nb_node)
+        print("nb_train: ", nb_train)
+        print("nb_val: ", nb_val)
+        print("nb_word: ", nb_word)
+
         # create index loader
         train_idx = TensorDataset(torch.arange(0, nb_train, dtype=torch.long))
         val_idx = TensorDataset(torch.arange(nb_train, nb_train + nb_val, dtype=torch.long))
@@ -239,9 +332,9 @@ class GraphDataObject:
         """
         Returns the dataloaders for BERTGCN-based models when only the training set is used for graph construction
         """
-        dataset_name, batch_size = self.dataset_name, self.batch_size
+        dataset_name, batch_size, adj_type = self.dataset_name, self.batch_size, self.adj_type
         # Data Preprocess
-        adj, features, y_train, y_val, train_mask, val_mask, train_size = load_train_corpus(dataset_name)
+        adj, features, y_train, y_val, train_mask, val_mask, train_size = load_train_corpus(dataset_name, adj_type)
         dataset_name += "_inductive"
         '''
         adj: n*n sparse adjacency matrix
@@ -250,17 +343,10 @@ class GraphDataObject:
         '''
 
         # compute number of real train/val/test/word nodes and number of classes
-        nb_node = features.shape[0]
+        nb_node = adj.shape[0]
         nb_train, nb_val = train_mask.sum(), val_mask.sum()
         nb_word = nb_node - nb_train - nb_val
         nb_class = y_train.shape[1]
-
-        # load documents and compute input encodings
-        corpus_file = './dataset/corpus/' + dataset_name +'_shuffle.txt'
-        with open(corpus_file, 'r') as f:
-            text = f.read()
-            text = text.replace('\\', '')
-            text = text.split('\n')
         
         # create index loader
         train_idx = TensorDataset(torch.arange(0, nb_train, dtype=torch.long))
@@ -327,21 +413,65 @@ class GraphDataObject:
         # load documents and compute input encodings for BERT
         if self.train_only:
             dataset_name += "_inductive"
-        corpse_file = './dataset/corpus/' + dataset_name +'_shuffle.txt'
-        with open(corpse_file, 'r') as f:
-            text = f.read()
-            text = text.replace('\\', '')
-            text = text.split('\n')
-        input = model.tokenizer(text, max_length=max_length, truncation=True, padding='max_length', return_tensors='pt')
-        input_ids, attention_mask = input.input_ids, input.attention_mask
-        if self.train_only:
-            input_ids = torch.cat([input_ids, torch.zeros((nb_word, max_length), dtype=torch.long)])
-            attention_mask = torch.cat([attention_mask, torch.zeros((nb_word, max_length), dtype=torch.long)])
+        if dataset_name in PAIR_DATASETS:
+            base_path = BASE_PAIR
         else:
-            input_ids = torch.cat([input_ids[:-nb_test], torch.zeros((nb_word, max_length), dtype=torch.long), input_ids[-nb_test:]])
-            attention_mask = torch.cat([attention_mask[:-nb_test], torch.zeros((nb_word, max_length), dtype=torch.long), attention_mask[-nb_test:]])
+            base_path = BASE
+        corpse_file = f'{base_path}/corpus/{dataset_name}_shuffle.txt'
+        with open(corpse_file, 'r') as f:
+            text = f.read().replace('\\', '').split('\n')
+
+        a_list, b_list = [], []
+        for line in text:
+            a, b = split_ab(line)   # b is None for single-sentence datasets
+            a_list.append(a)
+            b_list.append(b)
+
+        if self.dataset_name in PAIR_DATASETS:
+            # 3) Tokenize in pair mode (tokenizers handle None in b_list)
+            enc = model.tokenizer(
+                a_list,
+                b_list,
+                max_length=max_length,
+                truncation=True,
+                padding='max_length',
+                return_tensors='pt',
+                return_token_type_ids=True  # BERT uses these; RoBERTa will return zeros
+            )
+        else:
+            enc = model.tokenizer(
+                text,
+                max_length=max_length,
+                truncation=True,
+                padding='max_length',
+                return_tensors='pt',
+                return_token_type_ids=True  # BERT uses these; RoBERTa will return zeros
+            )
+            
+        input_ids      = enc["input_ids"]
+        attention_mask = enc["attention_mask"]
+        tti            = enc.get("token_type_ids", None)
+
+        if self.adj_type != "doc_doc":
+            if self.train_only:
+                input_ids = torch.cat([input_ids, torch.zeros((nb_word, max_length), dtype=torch.long)])
+                attention_mask = torch.cat([attention_mask, torch.zeros((nb_word, max_length), dtype=torch.long)])
+                if tti is not None:
+                    tti = torch.cat([tti, torch.zeros((nb_word, max_length), dtype=torch.long)])
+            else:
+                input_ids = torch.cat([input_ids[:-nb_test], torch.zeros((nb_word, max_length), dtype=torch.long), input_ids[-nb_test:]])
+                attention_mask = torch.cat([attention_mask[:-nb_test], torch.zeros((nb_word, max_length), dtype=torch.long), attention_mask[-nb_test:]])
+                if tti is not None:
+                    tti = torch.cat([tti[:-nb_test], torch.zeros((nb_word, max_length), dtype=torch.long), tti[-nb_test:]])
+        else:
+            input_ids = input_ids.to(dtype=torch.long)
+            attention_mask = attention_mask.to(dtype=torch.long)
+            if tti is not None:
+                tti = tti.to(dtype=torch.long)
+
         self.input_ids, self.attention_mask = input_ids, attention_mask
-    
+        self.token_type_ids = tti  # optional: available if you want it in forward()
+
     def set_graph_data(self, model):
         adj = self.adj
         nb_node = adj.shape[0]
