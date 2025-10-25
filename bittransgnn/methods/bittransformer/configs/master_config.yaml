@@ -1,0 +1,14 @@
+configs:
+  # Example for BERT on COLA
+  - method: grid
+    metric: {name: best_val_acc, goal: maximize}
+    log_configs: {comet: True, pandas_df: True, wandb: False, project_name: bittrans-train, workspace: !!null, api_key: !!null} #you should enter the workspace and the api_key of your Comet account here
+    experiment_configs: {seed: 1, dataset_name: "cola", bert_pre_model: "bert-base-uncased", device: "cuda:0", log_ckpt: False, save_ckpt: True, save_logits: True, report_time: True, checkpoint_dir: , nb_epochs: 100, patience: 15, eval_test: False, eval_test_every_n_epochs: 1}
+    model_configs: {max_length: 128, quantize_bert: False, quantize_embeddings: False, quantize_attention: False, num_bits_act: 32.0, num_states: 0, adj_type: "full"}
+    parameters: {bert_lr: 0.00002, batch_size: 32, bert_quant_type: "QAT"}
+  - method: grid
+    metric: {name: best_val_acc, goal: maximize}
+    log_configs: {comet: True, pandas_df: True, wandb: False, project_name: bittrans-train, workspace: !!null, api_key: !!null}
+    experiment_configs: {seed: 2, dataset_name: "cola", bert_pre_model: "bert-base-uncased", device: "cuda:0", log_ckpt: False, save_ckpt: True, save_logits: True, report_time: True, checkpoint_dir: , nb_epochs: 100, patience: 15, eval_test: False, eval_test_every_n_epochs: 1}
+    model_configs: {max_length: 128, quantize_bert: True, quantize_embeddings: True, quantize_attention: True, num_bits_act: 8.0, num_states: 2, adj_type: "full"}
+    parameters: {bert_lr: 0.00002, batch_size: 32, bert_quant_type: "QAT"}

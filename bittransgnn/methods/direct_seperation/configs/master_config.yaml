@@ -1,0 +1,120 @@
+configs:
+  - sweep_agent: comet
+    algorithm: grid
+    spec: 
+      metric: best_val_acc
+      objective: maximize
+
+    log_configs:
+      comet: True
+      pandas_df: True
+      wandb: False
+      project_name: bittransgnn-direct-seperation
+      workspace: !!null #you should enter the name of your Comet workspace here
+      api_key: !!null #you should enter the api_key of your Comet account here
+
+    load_configs:
+      workspace: !!null #you should enter the name of your Comet workspace here
+      api_key: !!null #you should enter the api_key of your Comet account here
+      experiment_load_name: !!null
+      experiment_load_key: !!null
+      manual_load_ckpt: !!null
+      local_load: True
+
+    experiment_configs:
+      seed: 0
+      inference_type: "transductive"
+      dataset_name: "rte"
+      bert_pre_model: "bert-base-uncased"
+      device: "cuda:0"
+      log_ckpt: False
+      save_ckpt: False
+      save_logits: False
+      report_time: False
+      checkpoint_dir: !!null
+      nb_epochs: 100
+      patience: 10
+      eval_test: True
+      eval_test_every_n_epochs: 1
+
+    model_configs: 
+      max_length: 128
+      quantize_bert: True
+      quantize_embeddings: True
+      quantize_attention: True
+      quantize_gcn: False
+      num_bits_act: 1.0
+      num_states: 2
+      gcn_num_states: 2
+      adj_type: "full"
+
+    parameters: 
+      gcn_layers: 2
+      bert_lr: 0.00001
+      gcn_lr: 0.001
+      batch_size: 32
+      lmbd: 0.75
+      bert_quant_type: "QAT"
+      joint_training: True
+      graph_hidden_size: 256
+      dropout: 0.5
+
+  - sweep_agent: comet
+    algorithm: grid
+    spec: 
+      metric: best_val_acc
+      objective: maximize
+
+    log_configs:
+      comet: True
+      pandas_df: True
+      wandb: False
+      project_name: bittransgnn-direct-seperation
+      workspace: !!null #you should enter the name of your Comet workspace here
+      api_key: !!null #you should enter the api_key of your Comet account here
+
+    load_configs:
+      workspace: !!null #you should enter the name of your Comet workspace here
+      api_key: !!null #you should enter the api_key of your Comet account here
+      experiment_load_name: !!null
+      experiment_load_key: !!null
+      manual_load_ckpt: !!null
+      local_load: True
+
+    experiment_configs:
+      seed: 0
+      inference_type: "transductive"
+      dataset_name: "mrpc"
+      bert_pre_model: "bert-base-uncased"
+      device: "cuda:0"
+      log_ckpt: False
+      save_ckpt: False
+      save_logits: False
+      report_time: False
+      checkpoint_dir: !!null
+      nb_epochs: 100
+      patience: 10
+      eval_test: True
+      eval_test_every_n_epochs: 1
+
+    model_configs: 
+      max_length: 128
+      quantize_bert: True
+      quantize_embeddings: True
+      quantize_attention: True
+      quantize_gcn: False
+      num_bits_act: 1.0
+      num_states: 2
+      gcn_num_states: 2
+      adj_type: "full"
+
+    parameters: 
+      gcn_layers: 2
+      bert_lr: 0.00001
+      gcn_lr: 0.001
+      batch_size: 32
+      lmbd: 0.9
+      bert_quant_type: "QAT"
+      joint_training: True
+      graph_hidden_size: 256
+      dropout: 0.5

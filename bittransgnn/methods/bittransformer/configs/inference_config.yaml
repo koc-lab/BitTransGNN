@@ -29,10 +29,15 @@ experiment_configs:
 model_configs: 
   max_length: 128
   quantize_bert: True
-  quantize_embeddings: False
+  quantize_embeddings: True
+  quantize_attention: True
   num_bits_act: 8.0
-  num_states: [2,3,5]
+  num_states: 2
+  adj_type: "full"
+  linear_backend: "fp32"
+  embedding_backend: "fp32"
+  attn_backend: "fp32"
 
 parameters: 
   batch_size: 32
-  bert_quant_type: "PTQ"
+  bert_quant_type: "QAT"

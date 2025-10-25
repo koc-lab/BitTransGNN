@@ -31,13 +31,19 @@ model_configs:
   max_length: 128
   quantize_bert: True
   quantize_teacher_bert: True
-  quantize_embeddings: False
-  quantize_teacher_embeddings: False
+  quantize_embeddings: True
+  quantize_teacher_embeddings: True
+  quantize_attention: True
+  quantize_teacher_attention: True
   quantize_gcn: False
   num_bits_act: 8.0
   teacher_num_states: 2
   student_num_states: 2
   gcn_num_states: 2
+  adj_type: "full"
+  linear_backend: "fp32"
+  embedding_backend: "fp32"
+  attn_backend: "fp32"
 
 parameters: 
   gcn_layers: 2

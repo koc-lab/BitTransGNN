@@ -18,29 +18,34 @@ load_configs:
 experiment_configs:
   seed: 0
   inference_type: "transductive"
-  dataset_name: "20ng"
-  bert_pre_model: "roberta-base"
+  dataset_name: "cola"
+  bert_pre_model: "bert-base-uncased"
   device: "cuda:1"
   checkpoint_dir: !!null
   log_ckpt: False
   save_ckpt: False
-  save_logits: False
+  save_logits: True
   report_time: False
 
 model_configs: 
   max_length: 128
   quantize_bert: True
-  quantize_embeddings: False
+  quantize_embeddings: True
+  quantize_attention: True
   quantize_gcn: False
   num_bits_act: 8.0
-  num_states: 2
+  num_states: 5
   gcn_num_states: 2
+  adj_type: "full"
+  linear_backend: "fp32"
+  embedding_backend: "fp32"
+  attn_backend: "fp32"
 
 parameters: 
   gcn_layers: 2
   batch_size: 32
   lmbd: 0.55
-  bert_quant_type: "QAT"
-  joint_training: False
+  bert_quant_type: "PTQ"
+  joint_training: True
   graph_hidden_size: 256
   dropout: 0.5

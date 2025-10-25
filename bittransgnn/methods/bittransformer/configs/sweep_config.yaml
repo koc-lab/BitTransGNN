@@ -26,11 +26,13 @@ experiment_configs:
 model_configs: 
   max_length: 128
   quantize_bert: True
-  quantize_embeddings: False
-  #num_bits_act: 8.0
+  quantize_embeddings: True
+  quantize_attention: True
+  num_bits_act: 8.0
   num_states: 2
+  adj_type: "full"
 
 parameters: 
-  bert_lr: 0.00001 #we override learning rate in run_sweep depending on the task
+  bert_lr: [0.00005, 0.00002]
   batch_size: 32
   bert_quant_type: "QAT"

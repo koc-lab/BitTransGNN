@@ -36,13 +36,16 @@ model_configs:
   max_length: 128
   quantize_bert: True
   quantize_teacher_bert: True
-  quantize_embeddings: False
-  quantize_teacher_embeddings: False
+  quantize_embeddings: True
+  quantize_teacher_embeddings: True
+  quantize_attention: True
+  quantize_teacher_attention: True
   quantize_gcn: False
   num_bits_act: 8.0
-  teacher_num_states: 2
-  student_num_states: 2
+  teacher_num_states: 5
+  student_num_states: 5
   gcn_num_states: 2
+  adj_type: "full"
 
 parameters: 
   gcn_layers: 2
@@ -53,8 +56,8 @@ parameters:
   gcn_lr: 0.001
   batch_size: 32
   teacher_lmbd: 0.55
-  teacher_bert_quant_type: "QAT"
-  student_bert_quant_type: "QAT"
-  joint_training: False
+  teacher_bert_quant_type: "PTQ"
+  student_bert_quant_type: "PTQ"
+  joint_training: True
   graph_hidden_size: 256
   dropout: 0.5

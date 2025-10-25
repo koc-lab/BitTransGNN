@@ -1,4 +1,4 @@
-from comet_ml import Optimizer
+from comet_ml import Optimizer, Experiment
 
 from pathlib import Path
 
@@ -22,16 +22,20 @@ parameters_sweep = {par_name: parameters[par_name] for par_name in parameters.ke
 parameters_sweep["bert_pre_model"] = exp_configs["bert_pre_model"]
 parameters_sweep["inference_type"] = exp_configs["inference_type"]
 parameters_sweep["quantize_bert"] = model_configs["quantize_bert"]
+parameters_sweep["quantize_embeddings"] = model_configs["quantize_embeddings"]
+parameters_sweep["quantize_attention"] = model_configs["quantize_attention"]
+parameters_sweep["num_bits_act"] = model_configs["num_bits_act"]
 parameters_sweep["num_states"] = model_configs["num_states"]
 parameters_sweep["dataset_name"] = exp_configs["dataset_name"]
 parameters_sweep["seed"] = exp_configs["seed"]
-if parameters_sweep == "cola":
+parameters_sweep["adj_type"] = model_configs["adj_type"]
+if parameters_sweep["dataset_name"] == "cola":
     sweep_metric = "best_val_matthews_corr"
-elif parameters_sweep == "stsb":
+elif parameters_sweep["dataset_name"] == "stsb":
     sweep_metric = "best_val_pearson_corr"
-elif parameters_sweep == "mrpc":
+elif parameters_sweep["dataset_name"] == "mrpc":
     sweep_metric = "best_val_f1"
-elif parameters_sweep == "rte":
+elif parameters_sweep["dataset_name"] == "rte":
     sweep_metric = "best_val_accuracy"
 else:
     sweep_metric = "best_val_accuracy"
@@ -51,9 +55,13 @@ for experiment in optimizer.get_experiments():
     exp_configs["bert_pre_model"] = experiment.get_parameter("bert_pre_model")
     exp_configs["inference_type"] = experiment.get_parameter("inference_type")
     model_configs["quantize_bert"] = experiment.get_parameter("quantize_bert")
+    model_configs["quantize_embeddings"] = experiment.get_parameter("quantize_embeddings")
+    model_configs["quantize_attention"] = experiment.get_parameter("quantize_attention")
+    model_configs["num_bits_act"] = experiment.get_parameter("num_bits_act")
     model_configs["num_states"] = experiment.get_parameter("num_states")
     exp_configs["dataset_name"] = experiment.get_parameter("dataset_name")
     exp_configs["seed"] = experiment.get_parameter("seed")
+    model_configs["adj_type"] = experiment.get_parameter("adj_type")  # Get adj_type from experiment
     model_configs["model_type"] = get_model_type(model_configs["quantize_bert"], model_configs["quantize_gcn"])
     model_configs["train_state"] = get_train_state(parameters["joint_training"])
     print("train_state:", model_configs["train_state"])
@@ -65,8 +73,7 @@ for experiment in optimizer.get_experiments():
     model_checkpoint, ckpt_dir, best_metrics, logits = run_bittransgnn(iter_config)
     log_ckpt, save_ckpt, save_logits = exp_configs["log_ckpt"], exp_configs["save_ckpt"], exp_configs["save_logits"]
     experiment.log_metrics(best_metrics)
-    logger = Logger(log_configs["comet"], log_configs["pandas_df"], log_configs["wandb"], log_ckpt, save_ckpt, save_logits,
-                    api_key=log_configs["api_key"], workspace=log_configs["workspace"])
+    logger = Logger(log_configs["comet"], log_configs["pandas_df"], log_configs["wandb"], log_ckpt, save_ckpt)
     logger.log(iter_config, best_metrics, logits,
                 model_name="bittransgnn", project_name="bittransgnn", 
                 model_checkpoint=model_checkpoint, ckpt_dir=ckpt_dir,
