@@ -1,49 +1,61 @@
+from typing import Optional
 from torch import nn
+import torch.nn.functional as F
 from copy import deepcopy
-from .binary_layers import BitLinear, BitEmbedding
+from .binary_layers import BertBitSelfAttention, RobertaBitSelfAttention, BitLinear, BitEmbedding, BitSelfAttentionHF
 
-def replace_layer(module, num_states: int, linear_quantize: bool=True, quantize_embeddings: bool = False, num_bits_act: float = 8.0):
+# ---------- Linear/Embedding replacer ----------
+def replace_layer(module, num_states: int,
+                  linear_quantize: bool = True,
+                  quantize_embeddings: bool = False,
+                  num_bits_act: float = 8.0,
+                  linear_backend: str = None,
+                  embedding_backend: str = None):
     """
-    Replaces the Linear layers and the Embedding layers within the neural network or the transformer model by their quantized counterparts.
-    If the module being passed is not one of Linear or Embedding modules, it is not modified.
-
-    Args:
-        module: the module being passed through the function
-        num_states: number of states used to quantize the weights of the module
-        linear_quantize: boolean variable to determine whether to quantize the weights of the linear layer
-            Default: True
-        quantize_embeddings: boolean variable to determine whether to quantize the weights of the embedding layer
-            Default: False
-        num_bits_act: number of bits used to quantize the activations
-            Default: 8.0
+    Extended with optional backend selection for BitLinear/BitEmbedding.
     """
     if isinstance(module, nn.Linear):
         if linear_quantize:
-            target_state_dict   = deepcopy(module.state_dict())
-            bias                = True if module.bias is not None else False
-            new_module          = BitLinear(
-                                    in_features=module.in_features,
-                                    out_features=module.out_features,
-                                    bias=bias,
-                                    num_states=num_states,
-                                    num_bits_act=num_bits_act,
-                                )
-            new_module.load_state_dict(target_state_dict)
+            target_sd = deepcopy(module.state_dict())
+            bias = module.bias is not None
+            new_module = BitLinear(
+                in_features=module.in_features,
+                out_features=module.out_features,
+                bias=bias,
+                num_states=num_states,
+                num_bits_act=num_bits_act,
+            )
+            new_module.load_state_dict(target_sd)
+            if linear_backend and hasattr(new_module, "configure_inference_backend"):
+                try:
+                    new_module.configure_inference_backend(linear_backend)
+                except Exception:
+                    pass
             return new_module
         else:
             return module
+
     elif isinstance(module, nn.Embedding):
         if quantize_embeddings:
-            target_state_dict   = deepcopy(module.state_dict())
-            new_module          = BitEmbedding(num_embeddings=module.num_embeddings,
-                                            embedding_dim=module.embedding_dim,
-                                            num_states=num_states)
-            new_module.load_state_dict(target_state_dict)
+            target_sd = deepcopy(module.state_dict())
+            new_module = BitEmbedding(
+                num_embeddings=module.num_embeddings,
+                embedding_dim=module.embedding_dim,
+                num_states=num_states,
+            )
+            new_module.load_state_dict(target_sd)
+            if embedding_backend and hasattr(new_module, "configure_inference_backend"):
+                try:
+                    new_module.configure_inference_backend(embedding_backend)
+                except Exception:
+                    pass
             return new_module
         else:
             return module
+
     else:
         return module
+
 
 def recursive_setattr(obj, attr, value):
     """
@@ -54,75 +66,223 @@ def recursive_setattr(obj, attr, value):
         attr: the attribute being modified within the object
         value: the new value being assigned to the object's attribute
     """
-    attr = attr.split('.', 1)
-    if len(attr) == 1:
-        setattr(obj, attr[0], value)
+    parts = attr.split('.', 1)
+    if len(parts) == 1:
+        setattr(obj, parts[0], value)
     else:
-        recursive_setattr(getattr(obj, attr[0]), attr[1], value)
+        recursive_setattr(getattr(obj, parts[0]), parts[1], value)
 
-def quantize_tf_model(model, num_states: int = 2, linear_quantize: bool = True, quantize_embeddings: bool = False, num_bits_act: float = 8.0):
+# ---------- Detect HF-style attention blocks ----------
+def is_hf_self_attention_like(module: nn.Module) -> bool:
     """
-    Iterates over the transformer model being passed through the function to quantize the weights of different modules within the model.
+    Conservative duck-typing check for HF Bert-like self-attention blocks.
+    We only rely on attributes your BitSelfAttentionHF expects.
+    """
+    needed = [
+        "query", "key", "value",
+        "num_attention_heads", "attention_head_size", "all_head_size",
+        "dropout", "transpose_for_scores"
+    ]
+    return all(hasattr(module, attr) for attr in needed)
 
-    Args: 
-        model: the model being quantized
-        num_states: number of states used to quantize the weights of the module
-            Default: 2
-        linear_quantize: boolean variable to determine whether to quantize the weights of the linear layer
-            Default: True
-        quantize_embeddings: boolean variable to determine whether to quantize the weights of the embedding layer
-            Default: False
-        num_bits_act: number of bits used to quantize the activations
-            Default: 8.0
+# ---------- Replace a *single* module with BitSelfAttentionHF ----------
+def replace_attention_layer_old(module: nn.Module,
+                            num_bits_act: float = 8.0,
+                            quantize_scores: bool = False,
+                            quantize_probs: bool = False,
+                            attn_backend: str = None) -> nn.Module:
     """
-    for name, module in tuple(model.named_modules()):
-        if name:
-            recursive_setattr(model, name, replace_layer(module, num_states, linear_quantize=linear_quantize, quantize_embeddings=quantize_embeddings, num_bits_act=num_bits_act))
-    print("Quantization completed.")
-    print(f"Number of states for the quantized model: {num_states}")
-    if quantize_embeddings and linear_quantize:
-        print("Both linear layers and embedding weights are quantized.")
-    elif not(quantize_embeddings) and linear_quantize:
-        print("Linear layer weights are quantized but the embeddings are maintained full-precision.")
-    elif quantize_embeddings and not(linear_quantize):
-        print("Embeddings are quantized, however, linear layers are kept full-precision.")
+    If `module` looks like an HF attention block, wrap it with BitSelfAttentionHF.
+    Otherwise return unchanged.
+    Optionally set an inference backend if the wrapper supports it.
+    """
+    if is_hf_self_attention_like(module):
+        wrapped = BitSelfAttentionHF(
+            attn_module=module,
+            num_bits_act=num_bits_act,
+            quantize_scores=quantize_scores,
+            quantize_probs=quantize_probs,
+        )
+        # Optional: pick a faster backend if available (e.g., "sdpa", "bnb-int8", "binary-emu", "fp32")
+        if attn_backend and hasattr(wrapped, "configure_inference_backend"):
+            try:
+                wrapped.configure_inference_backend(attn_backend)
+            except Exception:
+                pass
+        return wrapped
+    return module
+
+def replace_attention_layer(model, num_bits_act=None):
+    if model.config.model_type == "bert":
+        attention_model = BertBitSelfAttention
+    elif model.config.model_type == "roberta":
+        attention_model = RobertaBitSelfAttention
     else:
-        print("No quantization is implemented over the linear layers and the embedding layers.")
+        raise NotImplementedError(f"Model type {model.config.model_type} not supported for attention replacement.")
+    if num_bits_act is not None:
+        model.config.num_bits_act = num_bits_act  # read by BitAttention at init
+    
+    for i, layer in enumerate(model.encoder.layer):
+        old_attn = layer.attention.self
+        new_attn = attention_model(
+            model.config,
+            position_embedding_type=getattr(old_attn, "position_embedding_type", "absolute"),
+        )
+        # Copy weights (Q/K/V/out) to keep initialization identical
+        new_attn.load_state_dict(old_attn.state_dict(), strict=False)
+        layer.attention.self = new_attn
     return model
 
-def quantize_bertgcn_architecture(model, ckpt, quantize_bert, bert_quant_type, quantize_gcn, num_states, joint_training, lmbd, quantize_embeddings, num_bits_act):
+def quantize_tf_model(
+    model: nn.Module,
+    *,
+    # pass 1 (per-layer)
+    num_states: int = 2,
+    linear_quantize: bool = True,
+    quantize_embeddings: bool = True,
+    num_bits_act: float = 8.0,
+    linear_backend: str = None,
+    embedding_backend: str = None,
+    quantize_attention: bool = True,
+    # pass 2 (attention wrapper)
+    attn_num_bits_act: float = 8.0,
+    quantize_scores: bool = False,
+    quantize_probs: bool = False,
+    attn_backend: str = None,
+) -> nn.Module:
+    # -------- pass 1: replace Linear / Embedding everywhere --------
+    if quantize_attention:
+        model.bert_model = replace_attention_layer(
+            model.bert_model,
+            num_bits_act=attn_num_bits_act,
+        )
+
+    for name, module in tuple(model.named_modules()):
+        if not name:
+            continue
+        new_m = replace_layer(
+            module,
+            num_states=num_states,
+            linear_quantize=linear_quantize,
+            quantize_embeddings=quantize_embeddings,
+            num_bits_act=num_bits_act,
+            linear_backend=linear_backend,
+            embedding_backend=embedding_backend,
+        )
+        if new_m is not module:
+            recursive_setattr(model, name, new_m)
+
     """
-    Quantizes the BERTGCN architecture being passed through the function. Uses the checkpoints from the fine-tuning stage of the BERT model to assign weights.
+    # -------- pass 2: wrap HF-style attention blocks --------
+    if quantize_attention:
+        for name, module in tuple(model.named_modules()):
+            if not name:
+                continue
+            if is_hf_self_attention_like(module):
+                wrapped = replace_attention_layer(
+                    module,
+                    num_bits_act=attn_num_bits_act,
+                    #quantize_scores=quantize_scores,
+                    #quantize_probs=quantize_probs,
+                    #attn_backend=attn_backend,
+                )
+                if wrapped is not module:
+                    recursive_setattr(model, name, wrapped)    
+    """
+    print("Quantization pass completed.")
+    print(f"- Weight states: {num_states} | Act bits: {num_bits_act}")
+    print(f"- Linear quant: {linear_quantize} ({linear_backend or 'default'})")
+    print(f"- Embedding quant: {quantize_embeddings} ({embedding_backend or 'default'})")
+    print(f"- Attention quant: {quantize_attention} ({attn_backend or 'default'})",
+          f"| score_q: {quantize_scores} | prob_q: {quantize_probs}")
 
-    Args: 
-        model: the BERTGCN model being quantized
-        ckpt: the BERT model checkpoint obtained from the initial fine-tuning stage of the transformer
-        bert_quant_type: method used to fine-tune the quantized model
-        num_states: number of states used to quantize the weights of the module
-        quantize_embeddings: boolean variable to determine whether to quantize the weights of the embedding layer
-        num_bits_act: number of bits used to quantize the activations
+    return model
 
-        #rest of the parameters are not used during quantization at this stage, and are only kept to give information regarding the model being used.
-        quantize_gcn: whether the GCN is being quantized. Note that GCN quantization is done within the BERTGCNTorch model.
-        joint_training: whether the transformer and the GCN are being jointly trained
-        lmbd: the interpolation parameter
+def quantize_bittransgnn_architecture(
+    model: nn.Module,
+    ckpt: dict,
+    quantize_bert: bool,
+    bert_quant_type: str,
+    quantize_gcn: bool,
+    num_states: int,
+    joint_training: bool,
+    interp_outs: bool,
+    lmbd: float,
+    quantize_embeddings: bool,
+    num_bits_act: float,
+    quantize_attention: bool = True,
+    *,
+    # NEW (optional) attention + backends
+    quantize_scores: bool = False,
+    quantize_probs: bool = False,
+    linear_backend: Optional[str] = None,       # "fp32", "cpu-int8-dynamic", "bnb-int8", "binary-emu"
+    embedding_backend: Optional[str] = None,    # "fp32", "cpu-int8-dynamic"
+    attn_backend: Optional[str] = None          # "fp32", "sdpa", "bnb-int8", "binary-emu"
+):
+    """
+    Quantizes the BERTGCN model (BERT + classifier; GCN is handled in its own class).
+    Compatible with attention swapping & backends.
     """
     if quantize_bert:
         print("model before quantization: ", model)
         if bert_quant_type == "QAT":
-            model.bert_model = quantize_tf_model(model=model.bert_model, num_states=num_states, quantize_embeddings=quantize_embeddings, num_bits_act=num_bits_act)
-            model.classifier = replace_layer(module=model.classifier, num_states=num_states, num_bits_act=num_bits_act)
-            model.bert_model.load_state_dict(ckpt['bert_model'])
-            model.classifier.load_state_dict(ckpt['classifier'])
+            # Quantize the architecture first, then load QAT-trained weights
+            model = quantize_tf_model(
+                model=model,
+                num_states=num_states,
+                linear_quantize=True,
+                quantize_embeddings=quantize_embeddings,
+                num_bits_act=num_bits_act,
+                quantize_attention=quantize_attention,
+                attn_num_bits_act=num_bits_act,
+                quantize_scores=quantize_scores,
+                quantize_probs=quantize_probs,
+                linear_backend=linear_backend,
+                embedding_backend=embedding_backend,
+                attn_backend=attn_backend,
+            )
+            model.classifier = replace_layer(
+                module=model.classifier,
+                num_states=num_states,
+                linear_quantize=True,
+                quantize_embeddings=False,
+                num_bits_act=num_bits_act,
+                linear_backend=linear_backend,
+                embedding_backend=None,
+            )
+            model.bert_model.load_state_dict(ckpt["bert_model"])
+            model.classifier.load_state_dict(ckpt["classifier"])
         else:
-            model.bert_model.load_state_dict(ckpt['bert_model'])
-            model.classifier.load_state_dict(ckpt['classifier'])
-            model.bert_model = quantize_tf_model(model=model.bert_model, num_states=num_states, quantize_embeddings=quantize_embeddings, num_bits_act=num_bits_act)
-            model.classifier = replace_layer(module=model.classifier, num_states=num_states, num_bits_act=num_bits_act)
+            # PTQ: load FP weights, then quantize (typical)
+            model.bert_model.load_state_dict(ckpt["bert_model"])
+            model.classifier.load_state_dict(ckpt["classifier"])
+            model = quantize_tf_model(
+                model=model,
+                num_states=num_states,
+                linear_quantize=True,
+                quantize_embeddings=quantize_embeddings,
+                num_bits_act=num_bits_act,
+                quantize_attention=quantize_attention,
+                attn_num_bits_act=num_bits_act,
+                quantize_scores=quantize_scores,
+                quantize_probs=quantize_probs,
+                linear_backend=linear_backend,
+                embedding_backend=embedding_backend,
+                attn_backend=attn_backend,
+            )
+            model.classifier = replace_layer(
+                module=model.classifier,
+                num_states=num_states,
+                linear_quantize=True,
+                quantize_embeddings=False,
+                num_bits_act=num_bits_act,
+                linear_backend=linear_backend,
+                embedding_backend=None,
+            )
     else:
-        model.bert_model.load_state_dict(ckpt['bert_model'])
-        model.classifier.load_state_dict(ckpt['classifier'])
-    
+        model.bert_model.load_state_dict(ckpt["bert_model"])
+        model.classifier.load_state_dict(ckpt["classifier"])
+
     if quantize_gcn:
         print("A quantized GCN model is being used.")
 
@@ -130,92 +290,340 @@ def quantize_bertgcn_architecture(model, ckpt, quantize_bert, bert_quant_type, q
         print("model after quantization: ", model)
     else:
         print("model: ", model)
-    
+
     if joint_training:
-        print(f'BERT model and the GCN model are jointly trained. The final outputs are interpolated by the parameter {lmbd}.')
-        print(f'Cls logits from BERT are passed through a classifier and interpolated with the GCN output by the parameter {lmbd} to obtain the final output.')
-    else:
-        print('GCN model is trained and BERT model is only used to obtain the initial feature vectors for GCN.')
-        print(f'Cls logits from BERT are passed through a classifier and interpolated with the GCN output by the parameter {lmbd} to obtain the final output.')
-    return model
-
-def quantize_bitbert_for_inference(model, ckpt, joint_training,
-                                   quantize_bert, num_states, bitbert_quant_type, quantize_embeddings, 
-                                   num_bits_act):
-    if quantize_bert:
-        if not(joint_training) and bitbert_quant_type=="PTQ": #if the quantized model has not been trained at all, then first load state dict then quantize
-            model.bert_model.load_state_dict(ckpt['bert_model'])
-            model.classifier.load_state_dict(ckpt['classifier'])
-            model.bert_model = quantize_tf_model(model=model.bert_model, num_states=num_states, quantize_embeddings=quantize_embeddings, num_bits_act=num_bits_act)
-            model.classifier = replace_layer(module=model.classifier, num_states=num_states)
+        if interp_outs:
+            print(f"BERT and GCN jointly trained; outputs interpolated by λ={lmbd}.")
+            print("BERT cls logits are interpolated with GCN output for final prediction.")
         else:
-            model.bert_model = quantize_tf_model(model=model.bert_model, num_states=num_states, quantize_embeddings=quantize_embeddings, num_bits_act=num_bits_act)
-            model.classifier = replace_layer(module=model.classifier, num_states=num_states)
-            model.bert_model.load_state_dict(ckpt['bert_model'])
-            model.classifier.load_state_dict(ckpt['classifier'])
+            print("GCN output is used for prediction; BERT provides trainable features (no interpolation).")
     else:
-        model.bert_model.load_state_dict(ckpt['bert_model'])
-        model.classifier.load_state_dict(ckpt['classifier'])
+        if interp_outs:
+            print("GCN is trained; BERT provides features for GCN.")
+            print(f"BERT cls logits are interpolated with GCN output by λ={lmbd} for final prediction.")
+        else:
+            print("GCN output determines predictions; BERT only provides features (no interpolation).")
     return model
 
 
-def quantize_bitbertgcn_for_inference(model, ckpt, joint_training,
-                                      quantize_bert, num_states, bitbert_quant_type, quantize_embeddings, 
-                                      num_bits_act):
+def quantize_bittransformer_for_inference(
+    model: nn.Module,
+    ckpt: dict,
+    joint_training: bool,
+    quantize_bert: bool,
+    num_states: int,
+    bitbert_quant_type: str,
+    quantize_embeddings: bool,
+    num_bits_act: float,
+    quantize_attention: bool = True,
+    *,
+    quantize_scores: bool = False,
+    quantize_probs: bool = False,
+    linear_backend: Optional[str] = None,
+    embedding_backend: Optional[str] = None,
+    attn_backend: Optional[str] = None
+):
+    """
+    BitBERT-only (BERT + classifier) inference quantization; attention & backends compatible.
+    """
     if quantize_bert:
-        if not(joint_training) and bitbert_quant_type=="PTQ": #if the quantized model has not been trained at all, then first load state dict then quantize
-            model.bert_model.load_state_dict(ckpt['bert_model'])
-            model.classifier.load_state_dict(ckpt['classifier'])
-            model.bert_model = quantize_tf_model(model=model.bert_model, num_states=num_states, quantize_embeddings=quantize_embeddings, num_bits_act=num_bits_act)
-            model.classifier = replace_layer(module=model.classifier, num_states=num_states)
+        if (not joint_training) and bitbert_quant_type == "PTQ":
+            # Load FP then quantize
+            model.bert_model.load_state_dict(ckpt["bert_model"])
+            model.classifier.load_state_dict(ckpt["classifier"])
+            model = quantize_tf_model(
+                model=model,
+                num_states=num_states,
+                linear_quantize=True,
+                quantize_embeddings=quantize_embeddings,
+                num_bits_act=num_bits_act,
+                quantize_attention=quantize_attention,
+                attn_num_bits_act=num_bits_act,
+                quantize_scores=quantize_scores,
+                quantize_probs=quantize_probs,
+                linear_backend=linear_backend,
+                embedding_backend=embedding_backend,
+                attn_backend=attn_backend,
+            )
+            model.classifier = replace_layer(
+                module=model.classifier,
+                num_states=num_states,
+                linear_quantize=True,
+                quantize_embeddings=False,
+                num_bits_act=num_bits_act,
+                linear_backend=linear_backend,
+                embedding_backend=None,
+            )
         else:
-            model.bert_model = quantize_tf_model(model=model.bert_model, num_states=num_states, quantize_embeddings=quantize_embeddings, num_bits_act=num_bits_act)
-            model.classifier = replace_layer(module=model.classifier, num_states=num_states)
-            model.bert_model.load_state_dict(ckpt['bert_model'])
-            model.classifier.load_state_dict(ckpt['classifier'])
+            # Quantize structure first (e.g., QAT use-case), then load trained weights
+            model = quantize_tf_model(
+                model=model,
+                num_states=num_states,
+                linear_quantize=True,
+                quantize_embeddings=quantize_embeddings,
+                num_bits_act=num_bits_act,
+                quantize_attention=quantize_attention,
+                attn_num_bits_act=num_bits_act,
+                quantize_scores=quantize_scores,
+                quantize_probs=quantize_probs,
+                linear_backend=linear_backend,
+                embedding_backend=embedding_backend,
+                attn_backend=attn_backend,
+            )
+            model.classifier = replace_layer(
+                module=model.classifier,
+                num_states=num_states,
+                linear_quantize=True,
+                quantize_embeddings=False,
+                num_bits_act=num_bits_act,
+                linear_backend=linear_backend,
+                embedding_backend=None,
+            )
+            model.bert_model.load_state_dict(ckpt["bert_model"])
+            model.classifier.load_state_dict(ckpt["classifier"])
     else:
-        model.bert_model.load_state_dict(ckpt['bert_model'])
-        model.classifier.load_state_dict(ckpt['classifier'])
+        model.bert_model.load_state_dict(ckpt["bert_model"])
+        model.classifier.load_state_dict(ckpt["classifier"])
+    return model
+
+
+def quantize_bittransgnn_for_inference(
+    model: nn.Module,
+    ckpt: dict,
+    joint_training: bool,
+    quantize_bert: bool,
+    num_states: int,
+    bitbert_quant_type: str,
+    quantize_embeddings: bool,
+    num_bits_act: float,
+    quantize_attention: bool = True,
+    *,
+    quantize_scores: bool = False,
+    quantize_probs: bool = False,
+    linear_backend: Optional[str] = None,
+    embedding_backend: Optional[str] = None,
+    attn_backend: Optional[str] = None
+):
+    """
+    BitBERT+GCN inference quantization; attention & backends compatible.
+    """
+    if quantize_bert:
+        if (not joint_training) and bitbert_quant_type == "PTQ":
+            model.bert_model.load_state_dict(ckpt["bert_model"])
+            model.classifier.load_state_dict(ckpt["classifier"])
+            model = quantize_tf_model(
+                model=model,
+                num_states=num_states,
+                linear_quantize=True,
+                quantize_embeddings=quantize_embeddings,
+                num_bits_act=num_bits_act,
+                quantize_attention=quantize_attention,
+                attn_num_bits_act=num_bits_act,
+                quantize_scores=quantize_scores,
+                quantize_probs=quantize_probs,
+                linear_backend=linear_backend,
+                embedding_backend=embedding_backend,
+                attn_backend=attn_backend,
+            )
+            model.classifier = replace_layer(
+                module=model.classifier,
+                num_states=num_states,
+                linear_quantize=True,
+                quantize_embeddings=False,
+                num_bits_act=num_bits_act,
+                linear_backend=linear_backend,
+                embedding_backend=None,
+            )
+        else:
+            model = quantize_tf_model(
+                model=model,
+                num_states=num_states,
+                linear_quantize=True,
+                quantize_embeddings=quantize_embeddings,
+                num_bits_act=num_bits_act,
+                quantize_attention=quantize_attention,
+                attn_num_bits_act=num_bits_act,
+                quantize_scores=quantize_scores,
+                quantize_probs=quantize_probs,
+                linear_backend=linear_backend,
+                embedding_backend=embedding_backend,
+                attn_backend=attn_backend,
+            )
+            model.classifier = replace_layer(
+                module=model.classifier,
+                num_states=num_states,
+                linear_quantize=True,
+                quantize_embeddings=False,
+                num_bits_act=num_bits_act,
+                linear_backend=linear_backend,
+                embedding_backend=None,
+            )
+            model.bert_model.load_state_dict(ckpt["bert_model"])
+            model.classifier.load_state_dict(ckpt["classifier"])
+    else:
+        model.bert_model.load_state_dict(ckpt["bert_model"])
+        model.classifier.load_state_dict(ckpt["classifier"])
+
     model.gcn.load_state_dict(ckpt["gcn"])
     return model
 
 
-def quantize_teacher_architecture(teacher_model, teacher_ckpt, 
-                                  joint_training, 
-                                  quantize_teacher_bert, teacher_bert_quant_type, teacher_num_states, quantize_teacher_embeddings, 
-                                  num_bits_act):
+def quantize_teacher_architecture(
+    teacher_model: nn.Module,
+    teacher_ckpt: dict,
+    joint_training: bool,
+    quantize_teacher_bert: bool,
+    teacher_bert_quant_type: str,
+    teacher_num_states: int,
+    quantize_teacher_embeddings: bool,
+    num_bits_act: float,
+    quantize_attention: bool = True,
+    *,
+    quantize_scores: bool = False,
+    quantize_probs: bool = False,
+    linear_backend: Optional[str] = None,
+    embedding_backend: Optional[str] = None,
+    attn_backend: Optional[str] = None
+):
+    """
+    Teacher model quantization with attention/backends compatibility.
+    """
     if quantize_teacher_bert:
-        if not(joint_training) and teacher_bert_quant_type == "PTQ": #if the quantized model has not been trained at all, then first load state dict then quantize
-            teacher_model.bert_model.load_state_dict(teacher_ckpt['bert_model'])
-            teacher_model.classifier.load_state_dict(teacher_ckpt['classifier'])
-            teacher_model.gcn.load_state_dict(teacher_ckpt['gcn'])
-            teacher_model.bert_model = quantize_tf_model(model=teacher_model.bert_model, num_states=teacher_num_states, quantize_embeddings=quantize_teacher_embeddings, num_bits_act=num_bits_act)
-            teacher_model.classifier = replace_layer(module=teacher_model.classifier, num_states=teacher_num_states)
+        if (not joint_training) and teacher_bert_quant_type == "PTQ":
+            teacher_model.bert_model.load_state_dict(teacher_ckpt["bert_model"])
+            teacher_model.classifier.load_state_dict(teacher_ckpt["classifier"])
+            teacher_model.gcn.load_state_dict(teacher_ckpt["gcn"])
+            teacher_model = quantize_tf_model(
+                model=teacher_model,
+                num_states=teacher_num_states,
+                linear_quantize=True,
+                quantize_embeddings=quantize_teacher_embeddings,
+                num_bits_act=num_bits_act,
+                quantize_attention=quantize_attention,
+                attn_num_bits_act=num_bits_act,
+                quantize_scores=quantize_scores,
+                quantize_probs=quantize_probs,
+                linear_backend=linear_backend,
+                embedding_backend=embedding_backend,
+                attn_backend=attn_backend,
+            )
+            teacher_model.classifier = replace_layer(
+                module=teacher_model.classifier,
+                num_states=teacher_num_states,
+                linear_quantize=True,
+                quantize_embeddings=False,
+                num_bits_act=num_bits_act,
+                linear_backend=linear_backend,
+                embedding_backend=None,
+            )
         else:
-            teacher_model.bert_model = quantize_tf_model(model=teacher_model.bert_model, num_states=teacher_num_states, quantize_embeddings=quantize_teacher_embeddings, num_bits_act=num_bits_act)
-            teacher_model.classifier = replace_layer(module=teacher_model.classifier, num_states=teacher_num_states)
-            teacher_model.bert_model.load_state_dict(teacher_ckpt['bert_model'])
-            teacher_model.classifier.load_state_dict(teacher_ckpt['classifier'])
-            teacher_model.gcn.load_state_dict(teacher_ckpt['gcn'])
+            teacher_model = quantize_tf_model(
+                model=teacher_model,
+                num_states=teacher_num_states,
+                linear_quantize=True,
+                quantize_embeddings=quantize_teacher_embeddings,
+                num_bits_act=num_bits_act,
+                quantize_attention=quantize_attention,
+                attn_num_bits_act=num_bits_act,
+                quantize_scores=quantize_scores,
+                quantize_probs=quantize_probs,
+                linear_backend=linear_backend,
+                embedding_backend=embedding_backend,
+                attn_backend=attn_backend,
+            )
+            teacher_model.classifier = replace_layer(
+                module=teacher_model.classifier,
+                num_states=teacher_num_states,
+                linear_quantize=True,
+                quantize_embeddings=False,
+                num_bits_act=num_bits_act,
+                linear_backend=linear_backend,
+                embedding_backend=None,
+            )
+            teacher_model.bert_model.load_state_dict(teacher_ckpt["bert_model"])
+            teacher_model.classifier.load_state_dict(teacher_ckpt["classifier"])
+            teacher_model.gcn.load_state_dict(teacher_ckpt["gcn"])
     else:
-        teacher_model.bert_model.load_state_dict(teacher_ckpt['bert_model'])
-        teacher_model.classifier.load_state_dict(teacher_ckpt['classifier'])
-        teacher_model.gcn.load_state_dict(teacher_ckpt['gcn'])
+        teacher_model.bert_model.load_state_dict(teacher_ckpt["bert_model"])
+        teacher_model.classifier.load_state_dict(teacher_ckpt["classifier"])
+        teacher_model.gcn.load_state_dict(teacher_ckpt["gcn"])
     return teacher_model
 
-def quantize_student_architecture(student_model, student_ckpt, quantize_student_bert, student_bert_quant_type, num_states, quantize_embeddings, num_bits_act):
+
+def quantize_student_architecture(
+    student_model: nn.Module,
+    student_ckpt: dict,
+    quantize_student_bert: bool,
+    student_bert_quant_type: str,
+    num_states: int,
+    quantize_embeddings: bool,
+    num_bits_act: float,
+    quantize_attention: bool = True,
+    *,
+    quantize_scores: bool = False,
+    quantize_probs: bool = False,
+    linear_backend: Optional[str] = None,
+    embedding_backend: Optional[str] = None,
+    attn_backend: Optional[str] = None
+):
+    """
+    Student model quantization with attention/backends compatibility.
+    """
     if quantize_student_bert:
         if student_bert_quant_type == "QAT":
-            student_model.bert_model = quantize_tf_model(model=student_model.bert_model, num_states=num_states, quantize_embeddings=quantize_embeddings, num_bits_act=num_bits_act)
-            student_model.classifier = replace_layer(module=student_model.classifier, num_states=num_states)
-            student_model.bert_model.load_state_dict(student_ckpt['bert_model'])
-            student_model.classifier.load_state_dict(student_ckpt['classifier'])
+            student_model = quantize_tf_model(
+                model=student_model,
+                num_states=num_states,
+                linear_quantize=True,
+                quantize_embeddings=quantize_embeddings,
+                num_bits_act=num_bits_act,
+                quantize_attention=quantize_attention,
+                attn_num_bits_act=num_bits_act,
+                quantize_scores=quantize_scores,
+                quantize_probs=quantize_probs,
+                linear_backend=linear_backend,
+                embedding_backend=embedding_backend,
+                attn_backend=attn_backend,
+            )
+            student_model.classifier = replace_layer(
+                module=student_model.classifier,
+                num_states=num_states,
+                linear_quantize=True,
+                quantize_embeddings=False,
+                num_bits_act=num_bits_act,
+                linear_backend=linear_backend,
+                embedding_backend=None,
+            )
+            student_model.bert_model.load_state_dict(student_ckpt["bert_model"])
+            student_model.classifier.load_state_dict(student_ckpt["classifier"])
         else:
-            student_model.bert_model.load_state_dict(student_ckpt['bert_model'])
-            student_model.classifier.load_state_dict(student_ckpt['classifier'])
-            student_model.bert_model = quantize_tf_model(model=student_model.bert_model, num_states=num_states, quantize_embeddings=quantize_embeddings, num_bits_act=num_bits_act)
-            student_model.classifier = replace_layer(module=student_model.classifier, num_states=num_states)
+            # PTQ order: load FP → quantize
+            student_model.bert_model.load_state_dict(student_ckpt["bert_model"])
+            student_model.classifier.load_state_dict(student_ckpt["classifier"])
+            student_model = quantize_tf_model(
+                model=student_model,
+                num_states=num_states,
+                linear_quantize=True,
+                quantize_embeddings=quantize_embeddings,
+                num_bits_act=num_bits_act,
+                quantize_attention=quantize_attention,
+                attn_num_bits_act=num_bits_act,
+                quantize_scores=quantize_scores,
+                quantize_probs=quantize_probs,
+                linear_backend=linear_backend,
+                embedding_backend=embedding_backend,
+                attn_backend=attn_backend,
+            )
+            student_model.classifier = replace_layer(
+                module=student_model.classifier,
+                num_states=num_states,
+                linear_quantize=True,
+                quantize_embeddings=False,
+                num_bits_act=num_bits_act,
+                linear_backend=linear_backend,
+                embedding_backend=None,
+            )
     else:
-        student_model.bert_model.load_state_dict(student_ckpt['bert_model'])
-        student_model.classifier.load_state_dict(student_ckpt['classifier'])
+        student_model.bert_model.load_state_dict(student_ckpt["bert_model"])
+        student_model.classifier.load_state_dict(student_ckpt["classifier"])
     return student_model
