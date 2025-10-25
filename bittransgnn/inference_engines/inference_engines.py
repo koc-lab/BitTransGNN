@@ -17,8 +17,8 @@ class BitTransformerInference:
         self.metrics = Metrics(dataset_name)
 
     def eval_step(self, batch):
-        (input_ids, attention_mask, label) = [x.to(self.device) for x in batch]
-        y_pred, logits = self.model(input_ids, attention_mask)
+        (input_ids, attention_mask, token_type_ids, label) = [x.to(self.device) for x in batch]
+        y_pred, logits = self.model(input_ids, attention_mask, token_type_ids)
         y_true = label
         loss = compute_loss(y_true=y_true, y_pred=y_pred, dataset_name=self.dataset_name)
         return loss, y_pred, y_true, logits
@@ -45,6 +45,10 @@ class BitTransformerInference:
         all_preds = np.concatenate(all_preds)
         all_labels = np.concatenate(all_labels)
         all_cls_logits = np.concatenate(all_cls_logits)
+        #print("all_labels")
+        #print(all_labels)
+        #print("all_preds")
+        #print(all_preds)
         logits = {"preds": all_preds, "labels": all_labels, "cls_logits": all_cls_logits}
         final_metric_scores = self.metrics.compute_metrics(all_preds, all_labels)
         return final_loss, final_metric_scores, logits
@@ -95,19 +99,38 @@ class BitTransformerInference:
         if secondary_metric:
             test_secondary_metric = test_metric_scores[secondary_metric]
             inference_metrics[f"best_test_{secondary_metric}"] = test_secondary_metric
-
+        inference_metrics["train_time_mean"] = train_time_mean
+        inference_metrics["val_time_mean"] = val_time_mean
+        inference_metrics["test_time_mean"] = test_time_mean
         return inference_metrics, logits
+
+    def time_text_epoch(self, splits=("train", "test", "val"), warmup=1, repeat=5):
+        """
+        Times a full end-to-end BERT inference epoch over `split`.
+        """
+        def _fn():
+            self.model.eval()
+            with torch.inference_mode():
+                for split in splits:
+                    _ = self.eval_epoch(data_split_name=split)
+        stats, _ = time_callable(_fn, warmup=warmup, repeat=repeat, device=self.device)
+        stats["what"] = f"text_full_epoch_{'_'.join(splits)}"
+        stats["splits"] = list(splits)
+        return stats
+
     
 class BitTransGNNInference:
-    def __init__(self, model, dataset_name, graph_data: GraphDataObject, joint_training, device, ext_cls_feats, batch_size, inductive=False):
+    def __init__(self, model, dataset_name, graph_data: GraphDataObject, interp_outs, joint_training, device, ext_cls_feats, batch_size, inductive=False, recompute_bert=False):
         self.model = model
         self.dataset_name = dataset_name
         self.graph_data = graph_data
+        self.interp_outs = interp_outs
         self.joint_training = joint_training
         self.device = device
         self.ext_cls_feats = ext_cls_feats
         self.batch_size = batch_size
         self.inductive = inductive
+        self.recompute_bert = recompute_bert
         self.metrics = Metrics(dataset_name)
 
     def update_cls_feats(self, ext_cls_feats=None):
@@ -118,30 +141,47 @@ class BitTransGNNInference:
         then it is necessary to call this function
         """        
         # no gradient needed, since we are only using bert model to get cls features.
-        doc_mask = self.graph_data.doc_mask.to(self.device).type(torch.BoolTensor)
+        #doc_mask = self.graph_data.doc_mask.to(self.device).type(torch.BoolTensor)
+        doc_mask = self.graph_data.doc_mask.to(self.device).bool()
         if self.ext_cls_feats is not None:
-            self.graph_data.cls_feats[doc_mask] = ext_cls_feats
+            dest = self.graph_data.cls_feats
+            mask_for_dest = doc_mask.to(dest.device)
+            src = ext_cls_feats.to(dest.device)
+            with torch.inference_mode(False):
+                self.graph_data.cls_feats = dest.clone().detach()
+                self.graph_data.cls_feats.requires_grad_(False)
+                self.graph_data.cls_feats[mask_for_dest] = src
         else:
             input_ids_full = self.graph_data.input_ids
             attention_mask_full = self.graph_data.attention_mask
+            token_type_ids_full = self.graph_data.token_type_ids
             dataloader = DataLoader(
-                TensorDataset(input_ids_full.to(self.device)[doc_mask], attention_mask_full.to(self.device)[doc_mask]),
+                TensorDataset(input_ids_full.to(self.device)[doc_mask], attention_mask_full.to(self.device)[doc_mask], token_type_ids_full.to(self.device)[doc_mask]),
                 batch_size=self.batch_size
             )
             with torch.no_grad():
                 self.model.eval()
                 cls_list = []
                 for i, batch in enumerate(dataloader):
-                    input_ids, attention_mask = [x.to(self.device) for x in batch]
-                    output = self.model.bert_model(input_ids=input_ids, attention_mask=attention_mask)[0][:, 0]
+                    input_ids, attention_mask, token_type_ids = [x.to(self.device) for x in batch]
+                    output = self.model.bert_model(input_ids=input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids)[0][:, 0]
                     cls_list.append(output.cpu())
                 cls_feat = torch.cat(cls_list, axis=0)
-            self.graph_data.cls_feats[doc_mask] = cls_feat
+            dest = self.graph_data.cls_feats
+            mask_for_dest = doc_mask.to(dest.device)
+            src = cls_feat.to(dest.device)
+
+            with torch.inference_mode(False):
+                self.graph_data.cls_feats = dest.clone().detach()
+                self.graph_data.cls_feats.requires_grad_(False)
+                self.graph_data.cls_feats[mask_for_dest] = src
+
             self.graph_data = self.graph_data.convert_device(device="cpu")
+            
     
     def eval_step(self, batch):
         idx = batch[0].to(self.device)
-        y_pred, _, logits = self.model(self.graph_data.convert_device(self.device), idx)
+        y_pred, _, logits = self.model(self.graph_data.convert_device(self.device), idx, recompute_bert=self.recompute_bert)
         y_true = self.graph_data.label.to(self.device)[idx]
         if self.dataset_name != "stsb":
             y_pred = torch.log(y_pred)
@@ -231,5 +271,108 @@ class BitTransGNNInference:
             else:
                 test_secondary_metric = test_metric_scores[secondary_metric]
                 inference_metrics[f"best_test_{secondary_metric}"] = test_secondary_metric
-
+        inference_metrics["train_time_mean"] = train_time_mean
+        inference_metrics["val_time_mean"] = val_time_mean
+        inference_metrics["test_time_mean"] = test_time_mean
         return inference_metrics, logits
+    
+    def time_update_cls_feats(self, warmup=0, repeat=1):
+        """
+        Times the one-time CLS feature extraction over train+val+test (as your current code does).
+        Note: update_cls_feats() ends by moving graph_data to CPU; that's fine since it's a one-time step.
+        """
+        def _fn():
+            # IMPORTANT: do not pass ext_cls_feats here unless you intend to *skip* BERT.
+            # We want to time the BERT forward path, so we force using the internal pipeline:
+            self.update_cls_feats(ext_cls_feats=None)
+        stats, _ = time_callable(_fn, warmup=warmup, repeat=repeat, device=self.device)
+        stats["what"] = "bert_cls_feature_extraction_fullset"
+        return stats
+
+    def time_gcn_full_graph_epoch(self, splits=("train","val","test"), warmup=1, repeat=5):
+        """
+        Times a *single* GCN full-graph 'epoch' by sequentially running eval over the requested splits.
+        This matches Stage A coverage (train+val+test) so numbers are comparable.
+        Includes dataloader H2D and any .cpu() in eval_epoch => 'end-to-end' timing.
+        """
+        def _one_epoch_fullset():
+            self.model.eval()
+            with torch.inference_mode():
+                # Run the same eval path you already use, per split:
+                for sp in splits:
+                    _ = self.eval_epoch(data_split_name=sp)
+            return None
+
+        stats, _ = time_callable(_one_epoch_fullset, warmup=warmup, repeat=repeat, device=self.device)
+        stats["what"] = f"gcn_full_graph_epoch_{'_'.join(splits)}"
+        stats["splits"] = list(splits)
+        return stats
+
+    def time_gcn_full_graph_epoch_static(self, splits=("train","test","val"), warmup=1, repeat=5):
+        idx_all = get_full_doc_indices(self.graph_data).to(self.device)
+        full_batch = (idx_all,)  # match your loader batch shape: tuple of one tensor
+
+        def _one_epoch_fullset_static():
+            self.model.eval()
+            with torch.inference_mode():
+                # Run the same eval path you already use, per split:
+                _ = self.eval_step(full_batch)
+            return None
+        stats, _ = time_callable(_one_epoch_fullset_static, warmup=warmup, repeat=repeat, device=self.device)
+        stats["what"] = f"gcn_full_graph_epoch_static_{'_'.join(splits)}"
+        stats["splits"] = list(splits)
+        return stats
+
+
+def get_full_doc_indices(graph_data):
+    if hasattr(graph_data, "doc_mask") and graph_data.doc_mask is not None:
+        return torch.nonzero(graph_data.doc_mask, as_tuple=False).squeeze(1).long()
+    if hasattr(graph_data, "label"):
+        return torch.arange(graph_data.label.shape[0], dtype=torch.long)
+    raise RuntimeError("Cannot infer full document indices; provide doc_mask or label.")
+
+
+import time
+import numpy as np
+import torch
+
+class Timer:
+    def __init__(self, device):
+        self.device = device
+    def sync(self):
+        if torch.cuda.is_available() and "cuda" in str(self.device):
+            torch.cuda.synchronize()
+    def now(self):
+        return time.perf_counter()
+
+def summarize_seconds(times_s):
+    a = np.array(times_s, dtype=float)
+    return {
+        "median_s": float(np.median(a)),
+        "p5_s": float(np.percentile(a, 5)),
+        "p95_s": float(np.percentile(a, 95)),
+        "mean_s": float(a.mean()),
+        "std_s": float(a.std(ddof=1) if a.size > 1 else 0.0),
+        "n": int(a.size),
+    }
+
+def time_callable(fn, *, warmup=1, repeat=5, device="cpu"):
+    """
+    Times a zero-arg callable `fn` with warm-ups and sync.
+    Returns (stats_dict, last_result).
+    """
+    t = Timer(device)
+    # warm-ups (not recorded)
+    for _ in range(max(0, warmup)):
+        t.sync(); _ = fn(); t.sync()
+    # timed
+    times = []
+    last = None
+    for _ in range(max(1, repeat)):
+        t.sync()
+        t0 = t.now()
+        last = fn()
+        t.sync()
+        t1 = t.now()
+        times.append(t1 - t0)
+    return summarize_seconds(times), last

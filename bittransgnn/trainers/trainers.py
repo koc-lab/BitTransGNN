@@ -1,5 +1,6 @@
 import time
 from typing import Optional
+import os
 import copy
 
 import torch
@@ -24,8 +25,8 @@ class BitTransformerTrainer:
         self.metrics = Metrics(dataset_name)
 
     def train_step(self, batch):
-        (input_ids, attention_mask, label) = [x.to(self.device) for x in batch]
-        y_pred, logits = self.model(input_ids, attention_mask)
+        (input_ids, attention_mask, token_type_ids, label) = [x.to(self.device) for x in batch]
+        y_pred, logits = self.model(input_ids, attention_mask, token_type_ids)
         y_true = label
         loss = compute_loss(y_pred=y_pred, y_true=y_true, dataset_name=self.dataset_name)
         return loss, y_pred, y_true, logits
@@ -59,8 +60,8 @@ class BitTransformerTrainer:
         return final_loss, final_metric_scores, logits
     
     def eval_step(self, batch):
-        (input_ids, attention_mask, label) = [x.to(self.device) for x in batch]
-        y_pred, logits = self.model(input_ids, attention_mask)
+        (input_ids, attention_mask, token_type_ids, label) = [x.to(self.device) for x in batch]
+        y_pred, logits = self.model(input_ids, attention_mask, token_type_ids)
         y_true = label
         loss = compute_loss(y_true=y_true, y_pred=y_pred, dataset_name=self.dataset_name)
         return loss, y_pred, y_true, logits
@@ -107,10 +108,11 @@ class BitTransformerTrainer:
     def run(self, nb_epochs: int, patience: int, 
             report_time: bool = False, model_ckpt_dir=None):
         #best_val_metric = 0
-        if self.dataset_name == "cola":
-            best_val_metric = -100
-        else:
-            best_val_metric = 0
+        #if self.dataset_name == "cola":
+        #    best_val_metric = -100
+        #else:
+        #    best_val_metric = 0
+        best_val_metric = -1e-6
         train_time_list = []
         test_time_list = []
         val_time_list = []
@@ -182,6 +184,9 @@ class BitTransformerTrainer:
                 if secondary_metric:
                     best_secondary_metric = test_metric_scores[secondary_metric]
                     best_metrics[f"best_test_{secondary_metric}"] = best_secondary_metric
+            best_metrics["train_time_mean"] = train_time_mean
+            best_metrics["val_time_mean"] = val_time_mean
+            best_metrics["test_time_mean"] = test_time_mean
 
             best_val_metric, early_stop = early_stopping(val_metric=best_val_metric, epoch=epoch)
 
@@ -199,7 +204,7 @@ class BitTransGNNTrainer:
     def __init__(self, model, dataset_name, 
                  optimizer, scheduler, 
                  graph_data: GraphDataObject, 
-                 joint_training, device, batch_size,
+                 interp_outs, joint_training, device, batch_size,
                  inductive=False,
                  eval_test=True, eval_test_every_n_epochs: int = 1):
         self.model = model
@@ -207,6 +212,7 @@ class BitTransGNNTrainer:
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.graph_data = graph_data
+        self.interp_outs = interp_outs
         self.joint_training = joint_training
         self.device = device
         self.batch_size = batch_size
@@ -222,24 +228,28 @@ class BitTransGNNTrainer:
         if pretrained bert model will only be used to initialize gcn features and bert model will not be trained,
         then it is necessary to call this function
         """
-        # no gradient needed
+        # no gradient needed, uses a large batchsize to speed up the process, or a small batchsize to reduce memory consumption
         doc_mask = self.graph_data.doc_mask.to(self.device).type(torch.BoolTensor)
         input_ids_full = self.graph_data.input_ids
         attention_mask_full = self.graph_data.attention_mask
+        token_type_ids_full = self.graph_data.token_type_ids
         dataloader = DataLoader(
-            TensorDataset(input_ids_full.to(self.device)[doc_mask], attention_mask_full.to(self.device)[doc_mask]),
+            TensorDataset(input_ids_full.to(self.device)[doc_mask], attention_mask_full.to(self.device)[doc_mask], token_type_ids_full.to(self.device)[doc_mask]),
             batch_size=self.batch_size
         )
         with torch.no_grad():
             self.model.eval()
+            #model = model.to(device)
             cls_list = []
             for i, batch in enumerate(dataloader):
-                input_ids, attention_mask = [x.to(self.device) for x in batch]
-                output = self.model.bert_model(input_ids=input_ids, attention_mask=attention_mask)[0][:, 0]
+                input_ids, attention_mask, token_type_ids = [x.to(self.device) for x in batch]
+                output = self.model.bert_model(input_ids=input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids)[0][:, 0]
                 cls_list.append(output.cpu())
             cls_feat = torch.cat(cls_list, axis=0)
         self.graph_data.convert_device(device="cpu")
         self.graph_data.cls_feats[doc_mask] = cls_feat
+        #self.graph_data = self.graph_data.convert_device(device="cpu")
+        #return self.graph_data
 
     def train_step(self, batch):
         idx = batch[0].to(self.device)
@@ -426,6 +436,11 @@ class BitTransGNNTrainer:
                         #if eval_test_epoch:
                         best_secondary_metric = test_metric_scores[secondary_metric]
                         best_metrics[f"best_test_{secondary_metric}"] = best_secondary_metric
+
+            best_metrics["train_time_mean"] = train_time_mean
+            best_metrics["val_time_mean"] = val_time_mean
+            best_metrics["test_time_mean"] = test_time_mean
+
             best_val_metric, early_stop = early_stopping(val_metric=best_val_metric, epoch=epoch)
 
             if early_stop:
@@ -436,6 +451,9 @@ class BitTransGNNTrainer:
                 model_checkpoint["gcn"] = copy.deepcopy(self.best_model.gcn.state_dict())
                 model_checkpoint["cls_feats"] = copy.deepcopy(self.best_cls_feats)
                 model_checkpoint["lmbd"] = copy.deepcopy(self.best_model.lmbd)
+                model_checkpoint["train_time_mean"] = train_time_mean
+                model_checkpoint["val_time_mean"] = val_time_mean
+                model_checkpoint["test_time_mean"] = test_time_mean
                 return model_checkpoint, best_metrics, self.best_logits
             if torch.cuda.is_available:
                 torch.cuda.empty_cache()
@@ -448,7 +466,7 @@ class BitTransGNNKDTrainer:
                  device, 
                  batch_size,
                  distillation_type, 
-                 ext_cls_feats=None, 
+                 ext_cls_feats=None,
                  teacher_optimizer=None, teacher_scheduler=None,
                  inductive=False,
                  eval_test=True, eval_test_every_n_epochs: int = 1):
@@ -476,7 +494,7 @@ class BitTransGNNKDTrainer:
         self.eval_test_every_n_epochs = eval_test_every_n_epochs
         self.metrics = Metrics(dataset_name)
 
-    def update_cls_feats(self):
+    def update_cls_feats(self, ext_cls_feats = None):
         """
         initializes cls_feats by using bert model in inference mode
         generally not mandatory to be used in case bert model and gcn will be jointly trained
@@ -484,22 +502,30 @@ class BitTransGNNKDTrainer:
         then it is necessary to call this function
         """
         doc_mask = self.graph_data.doc_mask.to(self.device).type(torch.BoolTensor)
-        input_ids_full = self.graph_data.input_ids
-        attention_mask_full = self.graph_data.attention_mask
-        dataloader = DataLoader(
-            TensorDataset(input_ids_full.to(self.device)[doc_mask], attention_mask_full.to(self.device)[doc_mask]),
-            batch_size=self.batch_size
-        )
-        with torch.no_grad():
-            self.model.eval()
-            cls_list = []
-            for i, batch in enumerate(dataloader):
-                input_ids, attention_mask = [x.to(self.device) for x in batch]
-                output = self.model.bert_model(input_ids=input_ids, attention_mask=attention_mask)[0][:, 0]
-                cls_list.append(output.cpu())
-            cls_feat = torch.cat(cls_list, axis=0)
-        self.graph_data.convert_device(device="cpu")
-        self.graph_data.cls_feats[doc_mask] = cls_feat
+        if ext_cls_feats is not None:
+            self.graph_data.cls_feats[doc_mask] = ext_cls_feats
+        else:
+            # no gradient needed, uses a large batchsize to speed up the process, or a small batchsize to reduce memory consumption
+            input_ids_full = self.graph_data.input_ids
+            attention_mask_full = self.graph_data.attention_mask
+            token_type_ids_full = self.graph_data.token_type_ids
+            dataloader = DataLoader(
+                TensorDataset(input_ids_full.to(self.device)[doc_mask], attention_mask_full.to(self.device)[doc_mask], token_type_ids_full.to(self.device)[doc_mask]),
+                batch_size=self.batch_size
+            )
+            with torch.no_grad():
+                self.teacher_model.eval()
+                #model = model.to(device)
+                cls_list = []
+                for i, batch in enumerate(dataloader):
+                    input_ids, attention_mask, token_type_ids = [x.to(self.device) for x in batch]
+                    output = self.teacher_model.bert_model(input_ids=input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids)[0][:, 0]
+                    cls_list.append(output.cpu())
+                cls_feat = torch.cat(cls_list, axis=0)
+            self.graph_data.convert_device(device="cpu")
+            self.graph_data.cls_feats[doc_mask] = cls_feat
+            #self.graph_data = self.graph_data.convert_device(device="cpu")
+            #return self.graph_data
 
     def train_step(self, batch):
         idx = batch[0].to(self.device)
@@ -517,9 +543,12 @@ class BitTransGNNKDTrainer:
         elif self.distillation_type == "online":
             y_teacher, y_teacher_soft, _ = self.teacher_model(self.graph_data.convert_device(self.device), idx, temperature=self.temperature)
             y_teacher, y_teacher_soft = y_teacher[train_mask], y_teacher_soft[train_mask]
+        #distill_loss = distillation_loss(student_out=y_soft_pred, teacher_out=y_teacher, temperature=self.temperature)
         distill_loss = distillation_loss(student_out=y_soft_pred, teacher_out=y_teacher_soft, temperature=self.temperature, dataset_name=self.dataset_name)
         y_true = self.graph_data.train_label.to(self.device)[idx][train_mask]
+        #true_loss = F.nll_loss(input=y_pred, target=y_true)
         true_loss = compute_loss(y_true=y_true, y_pred=y_pred, dataset_name=self.dataset_name)
+        #metric_scores = self.metrics.compute_metrics(y_pred, y_true)
         self.graph_data.cls_feats = self.graph_data.cls_feats.detach()
         return distill_loss, true_loss, y_pred, y_true, student_logits
 
@@ -568,9 +597,12 @@ class BitTransGNNKDTrainer:
         idx = batch[0].to(self.device)
         y_pred, y_soft_pred, logits = self.student_model(self.graph_data.convert_device(self.device), idx)
         y_teacher, y_teacher_soft, _ = self.teacher_model(self.graph_data.convert_device(self.device), idx)
+        #distill_loss = distillation_loss(student_out=y_soft_pred, teacher_out=y_teacher, temperature=self.temperature)
         distill_loss = distillation_loss(student_out=y_soft_pred, teacher_out=y_teacher_soft, temperature=self.temperature, dataset_name=self.dataset_name)
         y_true = self.graph_data.label.to(self.device)[idx]
+        #true_loss = F.nll_loss(input=y_pred, target=y_true)
         true_loss = compute_loss(y_true=y_true, y_pred=y_pred, dataset_name=self.dataset_name)
+        #metric_scores = self.metrics.compute_metrics(y_pred, y_true)
         return distill_loss, true_loss, y_pred, y_true, logits
 
     def eval_epoch(self, data_split_name="val"):
@@ -705,6 +737,11 @@ class BitTransGNNKDTrainer:
                         #if eval_test_epoch:
                         best_secondary_metric = test_metric_scores[secondary_metric]
                         best_metrics[f"best_test_{secondary_metric}"] = best_secondary_metric
+
+            best_metrics["train_time_mean"] = train_time_mean
+            best_metrics["val_time_mean"] = val_time_mean
+            best_metrics["test_time_mean"] = test_time_mean
+
             best_val_metric, early_stop = early_stopping(val_metric=best_val_metric, epoch=epoch)
 
             if early_stop:
@@ -712,6 +749,9 @@ class BitTransGNNKDTrainer:
                 print(best_metrics)
                 model_checkpoint["bert_model"] = copy.deepcopy(self.best_model.bert_model.state_dict())
                 model_checkpoint["classifier"] = copy.deepcopy(self.best_model.classifier.state_dict())
+                model_checkpoint["train_time_mean"] = train_time_mean
+                model_checkpoint["val_time_mean"] = val_time_mean
+                model_checkpoint["test_time_mean"] = test_time_mean
                 return model_checkpoint, best_metrics, self.best_logits
             if torch.cuda.is_available:
                 torch.cuda.empty_cache()
