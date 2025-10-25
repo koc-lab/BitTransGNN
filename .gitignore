@@ -7,3 +7,7 @@ visualization/tsne_plots/*
 visualization/logits_processed.pkl
 bittransgnn/dataset_full/*
 .DS_Store
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
