@@ -1,6 +1,6 @@
-# Quantized Transformers with Graph Neural Networks
+# BitTransGNN: Improving Quantized Transformers with Graph Neural Networks
 
-This repository contains the implementation of "Quantized Transformers with Graph Neural Networks" submitted to IEEE Transactions on Signal and Information Processing over Networks (TSIPN). 
+This repository contains the implementation of "Graph Neural Networks Improve Quantized Transformers by Incorporating Global Structural Relationships" submitted to IEEE Transactions on Signal and Information Processing over Networks (TSIPN). 
 
 ## Introduction
 
