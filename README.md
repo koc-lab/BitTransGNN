@@ -1,6 +1,6 @@
 # BitTransGNN: Improving Quantized Transformers with Graph Neural Networks
 
-This repository contains the implementation of "Graph Neural Networks Improve Quantized Transformers by Incorporating Global Structural Relationships" submitted to IEEE Transactions on Signal and Information Processing over Networks (TSIPN). 
+This repository contains the implementation of the paper ["Graph Neural Networks Improve Quantized Transformers by Incorporating Global Structural Relationships"](https://ieeexplore.ieee.org/document/11355815) accepted for publication in *IEEE Transactions on Signal and Information Processing over Networks (TSIPN)*. 
 
 ## Introduction
 
@@ -142,8 +142,9 @@ In this work, we propose a method to improve the performance of transformers qua
 
    To conduct the other visualization methods, including dimensionality reduction techniques such as UMAP and T-SNE, and PCA analysis applied on the similarity profiles of the final logits of BitTransformer and GNN models, can be found in `visualization.ipynb`.
 
-## Results
-   Results will be made public upon the completion of the reviewing stage.
+[//]: # (This is a comment, it will not be included)
+[//]: # (## Results)
+[//]: # (  Results will be made public upon the completion of the reviewing stage.)
 
 ## Acknowledgements 
    - The data preprocessing is adapted from the [TextGCN](https://github.com/yao8839836/text_gcn) repository.
